@@ -1,0 +1,157 @@
+use crate::lagrange::*;
+use crate::shine;
+use curve25519_dalek::ristretto::RistrettoPoint;
+use curve25519_dalek::scalar::Scalar;
+use sha2::Digest;
+use sha2::Sha256;
+
+type PubKey = RistrettoPoint;
+
+pub struct SecKey {
+    n: u32,
+    t: u32,
+    k: u32,
+    sk: Scalar,
+    rk: shine::PreprocKey,
+}
+
+type Signature = (RistrettoPoint, Scalar);
+
+pub fn keygen(n: u32, t: u32) -> (PubKey, Vec<SecKey>) {
+    assert!(t >= 1);
+    assert!(n >= 2 * t - 1);
+
+    let mut seckeys: Vec<SecKey> = Vec::new();
+
+    // The Shine key shares
+    let shinekeys = shine::Key::keygen(n, t);
+
+    // The signature key shares
+    let shamirpoly = ScalarPoly::rand((t as usize) - 1);
+    let pubkey = shine::commit(&shamirpoly.coeffs[0]);
+    for k in 1..n + 1 {
+        seckeys.push(SecKey {
+            n,
+            t,
+            k,
+            sk: shamirpoly.eval(&Scalar::from(k)),
+            rk: shine::PreprocKey::preproc(&shinekeys[(k as usize) - 1]),
+        });
+    }
+
+    (pubkey, seckeys)
+}
+
+fn hash2(combcomm: &RistrettoPoint, pk: &PubKey, msg: &[u8]) -> Scalar {
+    let mut hash = Sha256::new();
+    hash.update(combcomm.compress().as_bytes());
+    hash.update(pk.compress().as_bytes());
+    hash.update(msg);
+    let mut hashval = [0u8; 32];
+    hashval[0..32].copy_from_slice(&hash.finalize());
+    Scalar::from_bytes_mod_order(hashval)
+}
+
+fn hash3(pk: &PubKey, coalition: &[u32], msg: &[u8]) -> [u8; 32] {
+    let mut hash = Sha256::new();
+    hash.update(pk.compress().as_bytes());
+    hash.update(coalition.len().to_le_bytes());
+    for c in coalition {
+        hash.update(c.to_le_bytes());
+    }
+    hash.update(msg);
+    hash.finalize().into()
+}
+
+pub fn sign1(pk: &PubKey, sk: &SecKey, coalition: &[u32], msg: &[u8]) -> RistrettoPoint {
+    assert!(coalition.len() >= 2 * (sk.t as usize) - 1);
+    let w = hash3(pk, coalition, msg);
+    shine::commit(&sk.rk.partialeval(&w))
+}
+
+pub fn sign2_polys(
+    pk: &PubKey,
+    sk: &SecKey,
+    coalition: &[u32],
+    lag_polys: &[ScalarPoly],
+    msg: &[u8],
+    commitments: &[RistrettoPoint],
+) -> Option<Scalar> {
+    // If the inputs are _malformed_, abort
+
+    assert!(coalition.len() == lag_polys.len());
+    assert!(coalition.len() == commitments.len());
+    assert!(coalition.len() >= 2 * (sk.t as usize) - 1);
+
+    // Find my own entry in the coalition; abort if it's not there
+    let kindex = coalition.iter().position(|&k| k == sk.k).unwrap();
+
+    let w = hash3(pk, coalition, msg);
+    let my_eval = sk.rk.partialeval(&w);
+    let my_commit = shine::commit(&my_eval);
+
+    assert!(commitments[kindex] == my_commit);
+
+    // If the inputs are just corrupt values from malicious other
+    // parties, return None but don't crash
+
+    let combcomm = shine::combinecomm_polys(sk.t, lag_polys, commitments)?;
+    let c = hash2(&combcomm, pk, msg);
+
+    Some(my_eval + c * sk.sk)
+}
+
+pub fn sign2(
+    pk: &PubKey,
+    sk: &SecKey,
+    coalition: &[u32],
+    msg: &[u8],
+    commitments: &[RistrettoPoint],
+) -> Option<Scalar> {
+    let polys = lagrange_polys(coalition);
+    sign2_polys(pk, sk, coalition, &polys, msg, commitments)
+}
+
+pub fn combine_polys(
+    pk: &PubKey,
+    t: u32,
+    coalition: &[u32],
+    lag_polys: &[ScalarPoly],
+    msg: &[u8],
+    commitments: &[RistrettoPoint],
+    sigshares: &[Scalar],
+) -> Option<Signature> {
+    assert!(coalition.len() == lag_polys.len());
+    assert!(coalition.len() == commitments.len());
+    assert!(coalition.len() == sigshares.len());
+    assert!(coalition.len() >= 2 * (t as usize) - 1);
+
+    let z = interpolate_polys_0(lag_polys, sigshares);
+
+    // Check the answer
+
+    let combcomm = shine::combinecomm_polys(t, lag_polys, commitments)?;
+    let c = hash2(&combcomm, pk, msg);
+
+    if shine::commit(&z) == combcomm + c * pk {
+        return Some((combcomm, z));
+    }
+    None
+}
+
+pub fn combine(
+    pk: &PubKey,
+    t: u32,
+    coalition: &[u32],
+    msg: &[u8],
+    commitments: &[RistrettoPoint],
+    sigshares: &[Scalar],
+) -> Option<Signature> {
+    let polys = lagrange_polys(coalition);
+    combine_polys(pk, t, coalition, &polys, msg, commitments, sigshares)
+}
+
+pub fn verify(pk: &PubKey, msg: &[u8], sig: &Signature) -> bool {
+    let c = hash2(&sig.0, pk, msg);
+    shine::commit(&sig.1) == sig.0 + c * pk
+}

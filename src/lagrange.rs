@@ -59,7 +59,7 @@ impl ScalarPoly {
     pub fn rand(degree: usize) -> Self {
         let mut rng = rand::thread_rng();
         let mut coeffs: Vec<Scalar> = Vec::new();
-        coeffs.resize_with(degree+1, || { Scalar::random(&mut rng) });
+        coeffs.resize_with(degree + 1, || Scalar::random(&mut rng));
         Self { coeffs }
     }
 
@@ -180,7 +180,7 @@ pub fn test_eval() {
 
 // Check that the sum of the given polys is just x^i
 #[cfg(test)]
-fn sum_polys_is_x_to_the_i(polys: &Vec<ScalarPoly>, i: usize) {
+fn sum_polys_is_x_to_the_i(polys: &[ScalarPoly], i: usize) {
     let mut sum = ScalarPoly::zero();
     for p in polys.iter() {
         sum.add(p);
@@ -217,4 +217,14 @@ pub fn test_lagrange_polys() {
     }
 
     sum_polys_is_x_to_the_i(&polys, 2);
+}
+
+// Interpolate values at x=0 given the pre-computed Lagrange polynomials
+pub fn interpolate_polys_0(lag_polys: &[ScalarPoly], y: &[Scalar]) -> Scalar {
+    assert!(lag_polys.len() == y.len());
+    let mut res = Scalar::zero();
+    for i in 0..y.len() {
+        res += lag_polys[i].coeffs[0] * y[i];
+    }
+    res
 }

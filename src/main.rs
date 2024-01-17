@@ -3,6 +3,7 @@ use rand::RngCore;
 use std::env;
 use std::time::Instant;
 
+pub mod arctic;
 mod lagrange;
 pub mod shine;
 
