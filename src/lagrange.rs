@@ -56,6 +56,24 @@ impl ScalarPoly {
         }
     }
 
+    pub fn rand(degree: usize) -> Self {
+        let mut rng = rand::thread_rng();
+        let mut coeffs: Vec<Scalar> = Vec::new();
+        coeffs.resize_with(degree+1, || { Scalar::random(&mut rng) });
+        Self { coeffs }
+    }
+
+    // Evaluate the polynomial at the given point (using Horner's
+    // method)
+    pub fn eval(&self, x: &Scalar) -> Scalar {
+        let mut res = Scalar::zero();
+        for coeff in self.coeffs.iter().rev() {
+            res *= x;
+            res += coeff;
+        }
+        res
+    }
+
     // Multiply self by the polynomial (x+a), for the given a
     pub fn mult_x_plus_a(&mut self, a: &Scalar) {
         // The length of coeffs is (deg+1), which is what we want the
@@ -122,6 +140,42 @@ pub fn lagrange_polys(coalition: &[u32]) -> Vec<ScalarPoly> {
         .iter()
         .map(|&x| lagrange_poly(coalition, x))
         .collect()
+}
+
+#[test]
+pub fn test_rand_poly() {
+    let rpoly = ScalarPoly::rand(3);
+
+    println!("randpoly = {:?}", rpoly);
+
+    assert!(rpoly.coeffs.len() == 4);
+    assert!(rpoly.coeffs[0] != Scalar::zero());
+    assert!(rpoly.coeffs[0] != rpoly.coeffs[1]);
+}
+
+#[test]
+pub fn test_eval() {
+    let mut poly = ScalarPoly::one();
+    poly.mult_x_plus_a(&Scalar::from(2u32));
+    poly.mult_x_plus_a(&Scalar::from(3u32));
+
+    // poly should now be (x+2)*(x+3) = x^2 + 5x + 6
+    assert!(poly.coeffs.len() == 3);
+    assert!(poly.coeffs[0] == Scalar::from(6u32));
+    assert!(poly.coeffs[1] == Scalar::from(5u32));
+    assert!(poly.coeffs[2] == Scalar::from(1u32));
+
+    let f0 = poly.eval(&Scalar::zero());
+    let f2 = poly.eval(&Scalar::from(2u32));
+    let f7 = poly.eval(&Scalar::from(7u32));
+
+    println!("f0 = {:?}", f0);
+    println!("f2 = {:?}", f2);
+    println!("f7 = {:?}", f7);
+
+    assert!(f0 == Scalar::from(6u32));
+    assert!(f2 == Scalar::from(20u32));
+    assert!(f7 == Scalar::from(90u32));
 }
 
 // Check that the sum of the given polys is just x^i
