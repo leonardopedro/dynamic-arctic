@@ -185,11 +185,10 @@ impl PreprocKey {
     }
 
     pub fn partialeval(&self, w: &[u8]) -> Scalar {
-        let mut res = Scalar::zero();
-        for &(theta, lagrange) in &self.secrets {
-            res += hash1(&theta, &w) * lagrange;
-        }
-        res
+        self.secrets
+            .iter()
+            .map(|&(theta, lagrange)| hash1(&theta, &w) * lagrange)
+            .sum()
     }
 
     pub fn delta(&self) -> usize {
