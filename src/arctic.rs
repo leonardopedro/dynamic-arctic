@@ -155,3 +155,29 @@ pub fn verify(pk: &PubKey, msg: &[u8], sig: &Signature) -> bool {
     let c = hash2(&sig.0, pk, msg);
     shine::commit(&sig.1) == sig.0 + c * pk
 }
+
+#[test]
+pub fn test_arctic() {
+    let n = 7u32;
+    let t = 4u32;
+
+    let (pubkey, seckeys) = keygen(n, t);
+
+    let coalition = (1..=n).collect::<Vec<u32>>();
+
+    let msg = b"A message to be signed";
+
+    let commits: Vec<RistrettoPoint> = seckeys
+        .iter()
+        .map(|key| sign1(&pubkey, key, &coalition, msg))
+        .collect();
+
+    let sigshares: Vec<Scalar> = seckeys
+        .iter()
+        .map(|key| sign2(&pubkey, key, &coalition, msg, &commits).unwrap())
+        .collect();
+
+    let sig = combine(&pubkey, t, &coalition, msg, &commits, &sigshares).unwrap();
+
+    assert!(verify(&pubkey, msg, &sig));
+}
