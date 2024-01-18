@@ -157,7 +157,7 @@ pub fn verify(pk: &PubKey, msg: &[u8], sig: &Signature) -> bool {
 }
 
 #[test]
-pub fn test_arctic() {
+pub fn test_arctic_good() {
     let n = 7u32;
     let t = 4u32;
 
@@ -180,4 +180,117 @@ pub fn test_arctic() {
     let sig = combine(&pubkey, t, &coalition, msg, &commits, &sigshares).unwrap();
 
     assert!(verify(&pubkey, msg, &sig));
+}
+
+#[test]
+#[should_panic]
+pub fn test_arctic_bad1() {
+    let n = 7u32;
+    let t = 4u32;
+
+    let (pubkey, seckeys) = keygen(n, t);
+
+    let coalition = (1..=n).collect::<Vec<u32>>();
+
+    let msg = b"A message to be signed";
+
+    let mut commits: Vec<RistrettoPoint> = seckeys
+        .iter()
+        .map(|key| sign1(&pubkey, key, &coalition, msg))
+        .collect();
+
+    // Modify player 1's commitment
+    let v = commits[1];
+    commits[0] += v;
+
+    // Player 1 should abort because its own commit is no longer in the
+    // list
+    sign2(&pubkey, &seckeys[0], &coalition, msg, &commits);
+}
+
+#[test]
+pub fn test_arctic_bad2() {
+    let n = 7u32;
+    let t = 4u32;
+
+    let (pubkey, seckeys) = keygen(n, t);
+
+    let coalition = (1..=n).collect::<Vec<u32>>();
+
+    let msg = b"A message to be signed";
+
+    let mut commits: Vec<RistrettoPoint> = seckeys
+        .iter()
+        .map(|key| sign1(&pubkey, key, &coalition, msg))
+        .collect();
+
+    // Modify player 1's commitment
+    let v = commits[1];
+    commits[0] += v;
+
+    // Player 2 should return None because the commitments are
+    // inconsistent
+    assert_eq!(sign2(&pubkey, &seckeys[1], &coalition, msg, &commits), None);
+}
+
+#[test]
+pub fn test_arctic_bad3() {
+    let n = 7u32;
+    let t = 4u32;
+
+    let (pubkey, seckeys) = keygen(n, t);
+
+    let coalition = (1..=n).collect::<Vec<u32>>();
+
+    let msg = b"A message to be signed";
+
+    let commits: Vec<RistrettoPoint> = seckeys
+        .iter()
+        .map(|key| sign1(&pubkey, key, &coalition, msg))
+        .collect();
+
+    let mut sigshares: Vec<Scalar> = seckeys
+        .iter()
+        .map(|key| sign2(&pubkey, key, &coalition, msg, &commits).unwrap())
+        .collect();
+
+    // Modify player 0's signature share
+    sigshares[0] += Scalar::one();
+
+    // Combine should return None because the shares don't combine to a
+    // valid signature
+    assert_eq!(
+        combine(&pubkey, t, &coalition, msg, &commits, &sigshares),
+        None
+    );
+}
+
+#[test]
+pub fn test_arctic_bad4() {
+    let n = 7u32;
+    let t = 4u32;
+
+    let (pubkey, seckeys) = keygen(n, t);
+
+    let coalition = (1..=n).collect::<Vec<u32>>();
+
+    let msg = b"A message to be signed";
+
+    let commits: Vec<RistrettoPoint> = seckeys
+        .iter()
+        .map(|key| sign1(&pubkey, key, &coalition, msg))
+        .collect();
+
+    let sigshares: Vec<Scalar> = seckeys
+        .iter()
+        .map(|key| sign2(&pubkey, key, &coalition, msg, &commits).unwrap())
+        .collect();
+
+    // Modify the message
+    let msg2 = b"A message to be signef";
+
+    assert_eq!(
+        combine(&pubkey, t, &coalition, msg2, &commits, &sigshares),
+        None
+    );
 }
