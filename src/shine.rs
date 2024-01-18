@@ -39,7 +39,7 @@ impl SubsetIter {
     pub fn new(n: u32, k: u32) -> Self {
         assert!(k >= 1);
         assert!(n >= k);
-        let nextsubset: Vec<u32> = (1..(k + 1)).collect();
+        let nextsubset: Vec<u32> = (1..=k).collect();
         Self {
             n,
             k,
@@ -100,7 +100,7 @@ impl Key {
     pub fn keygen(n: u32, t: u32) -> Vec<Self> {
         let mut rng = rand::thread_rng();
         let mut res: Vec<Self> = Vec::new();
-        for k in 1..(n + 1) {
+        for k in 1..=n {
             res.push(Self {
                 n,
                 t,
@@ -117,7 +117,7 @@ impl Key {
             rng.fill_bytes(&mut theta);
             let mut vnextind = 0usize;
             let mut vnext = v[0];
-            for i in 1..(n + 1) {
+            for i in 1..=n {
                 if i < vnext {
                     res[(i - 1) as usize]
                         .secrets
@@ -268,8 +268,8 @@ pub fn test_partialeval() {
 
     // Try interpolating different subsets and check that the answer is
     // the same
-    let interp1 = interpolate(&vec![1, 2, 3, 4, 5], &evals[0..5], 0);
-    let interp2 = interpolate(&vec![3, 4, 5, 6, 7], &evals[2..7], 0);
+    let interp1 = interpolate(&vec![1, 2, 3, 4, 5], &evals[0..=4], 0);
+    let interp2 = interpolate(&vec![3, 4, 5, 6, 7], &evals[2..=6], 0);
     println!("interp1 = {:?}", interp1);
     println!("interp2 = {:?}", interp2);
     assert!(interp1 == interp2);
@@ -285,12 +285,12 @@ pub fn test_combinecomm() {
     let commitments: Vec<RistrettoPoint> =
         ppkeys.iter().map(|k| commit(&k.partialeval(&w))).collect();
 
-    let comm1 = combinecomm(3, &vec![1, 2, 3, 4, 5], &commitments[0..5]);
-    let comm2 = combinecomm(3, &vec![3, 4, 5, 6, 7], &commitments[2..7]);
+    let comm1 = combinecomm(3, &vec![1, 2, 3, 4, 5], &commitments[0..=4]);
+    let comm2 = combinecomm(3, &vec![3, 4, 5, 6, 7], &commitments[2..=6]);
     assert_ne!(comm1, None);
     assert_ne!(comm2, None);
 
     // Test a failure case
-    let comm3 = combinecomm(3, &vec![1, 2, 3, 4, 6], &commitments[0..5]);
+    let comm3 = combinecomm(3, &vec![1, 2, 3, 4, 6], &commitments[0..=4]);
     assert_eq!(comm3, None);
 }

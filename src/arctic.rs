@@ -29,7 +29,7 @@ pub fn keygen(n: u32, t: u32) -> (PubKey, Vec<SecKey>) {
     // The signature key shares
     let shamirpoly = ScalarPoly::rand((t as usize) - 1);
     let pubkey = shine::commit(&shamirpoly.coeffs[0]);
-    for k in 1..n + 1 {
+    for k in 1..=n {
         seckeys.push(SecKey {
             n,
             t,
