@@ -14,6 +14,12 @@ pub struct SecKey {
     rk: shine::PreprocKey,
 }
 
+impl SecKey {
+    pub fn delta(&self) -> usize {
+        self.rk.delta()
+    }
+}
+
 type Signature = (RistrettoPoint, Scalar);
 
 pub fn keygen(n: u32, t: u32) -> (PubKey, Vec<SecKey>) {
