@@ -32,12 +32,13 @@ fn stddev(vals: &[f64]) -> f64 {
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 4 || args.len() > 5 {
-        println!("Usage: {} n t msglen [reps]", args[0]);
+        println!("Usage: {} n t Csize [reps]", args[0]);
         return;
     }
     let n: u32 = args[1].parse().unwrap();
     let t: u32 = args[2].parse().unwrap();
-    let msglen: usize = args[3].parse().unwrap();
+    let msglen: usize = 100;
+    let coalitionsize: u32 = args[3].parse().unwrap();
     let mut reps = 1usize;
     if args.len() > 4 {
         reps = args[4].parse().unwrap();
@@ -45,15 +46,19 @@ fn main() {
     let mut msg: Vec<u8> = Vec::new();
     let mut rng = rand::thread_rng();
     msg.resize(msglen, 0);
+    assert!(t >= 1);
+    assert!(coalitionsize >= 2*t-1);
+    assert!(n >= coalitionsize);
 
-    let (pubkey, seckeys) = arctic::keygen(n, t);
+    let (pubkey, mut seckeys) = arctic::keygen(n, t);
     let delta = seckeys[0].delta();
 
     let mut sign1_timings: Vec<f64> = Vec::new();
     let mut sign2_timings: Vec<f64> = Vec::new();
     let mut combine_timings: Vec<f64> = Vec::new();
 
-    let coalition = (1..=n).collect::<Vec<u32>>();
+    let coalition = (1..=coalitionsize).collect::<Vec<u32>>();
+    seckeys.truncate(coalitionsize as usize);
 
     for _ in 0..reps {
         rng.fill_bytes(&mut msg);
@@ -97,7 +102,7 @@ fn main() {
         "{} {} {} {} {} {:.1} ± {:.1} {:.1} ± {:.1} {:.1} ± {:.1}",
         n,
         t,
-        msglen,
+        coalitionsize,
         reps,
         delta,
         sign1_mean,
