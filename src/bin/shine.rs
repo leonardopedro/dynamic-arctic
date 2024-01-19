@@ -2,10 +2,7 @@ use curve25519_dalek::constants as dalek_constants;
 use rand::RngCore;
 use std::env;
 use std::time::Instant;
-
-pub mod arctic;
-mod lagrange;
-pub mod shine;
+use arctic::shine;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
