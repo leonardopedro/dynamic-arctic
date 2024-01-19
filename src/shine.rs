@@ -218,8 +218,13 @@ pub fn combinecomm_polys(
     assert!(mu >= 2 * (t as usize) - 1);
     assert!(mu == lag_polys.len());
     assert!(mu == lag_polys[0].coeffs.len());
+
+    // Compute the B_i for i from t to mu-1.  All of them should be the
+    // identity, so if any of them is not, then the commitments are
+    // inconsistents, and we will return None
     if ((t as usize)..mu)
         .map(|i| {
+            // B_i = \sum_j lag_polys[j].coeffs[i] * commitments[j]
             (0..mu)
                 .map(|j| lag_polys[j].coeffs[i] * commitments[j])
                 .sum()
@@ -228,6 +233,9 @@ pub fn combinecomm_polys(
     {
         return None;
     }
+
+    // Compute B_0 (which is the combined commitment) and return
+    // Some(B_0)
     Some(
         (0..mu)
             .map(|j| lag_polys[j].coeffs[0] * commitments[j])
