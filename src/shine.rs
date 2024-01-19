@@ -218,20 +218,21 @@ pub fn combinecomm_polys(
     assert!(mu >= 2 * (t as usize) - 1);
     assert!(mu == lag_polys.len());
     assert!(mu == lag_polys[0].coeffs.len());
-    for i in (t as usize)..mu {
-        let mut bi = RistrettoPoint::identity();
-        for j in 0..mu {
-            bi += lag_polys[j].coeffs[i] * commitments[j];
-        }
-        if bi != RistrettoPoint::identity() {
-            return None;
-        }
+    if ((t as usize)..mu)
+        .map(|i| {
+            (0..mu)
+                .map(|j| lag_polys[j].coeffs[i] * commitments[j])
+                .sum()
+        })
+        .any(|bi: RistrettoPoint| bi != RistrettoPoint::identity())
+    {
+        return None;
     }
-    let mut res = RistrettoPoint::identity();
-    for j in 0..mu {
-        res += lag_polys[j].coeffs[0] * commitments[j];
-    }
-    Some(res)
+    Some(
+        (0..mu)
+            .map(|j| lag_polys[j].coeffs[0] * commitments[j])
+            .sum(),
+    )
 }
 
 // Combine commitments. Return None if the commitments are not
