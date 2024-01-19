@@ -8,7 +8,6 @@ use sha2::Sha256;
 type PubKey = RistrettoPoint;
 
 pub struct SecKey {
-    n: u32,
     t: u32,
     k: u32,
     sk: Scalar,
@@ -31,7 +30,6 @@ pub fn keygen(n: u32, t: u32) -> (PubKey, Vec<SecKey>) {
     let pubkey = shine::commit(&shamirpoly.coeffs[0]);
     for k in 1..=n {
         seckeys.push(SecKey {
-            n,
             t,
             k,
             sk: shamirpoly.eval(&Scalar::from(k)),
