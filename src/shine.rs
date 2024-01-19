@@ -243,6 +243,26 @@ pub fn combinecomm_polys(
     )
 }
 
+// A version of the above that skips the verification.  This can be
+// used, for example, if you can check that the output is correct by
+// verifying a signature.
+pub fn combinecomm_polys_noverify(
+    t: u32,
+    lag_polys: &[ScalarPoly],
+    commitments: &[RistrettoPoint],
+) -> RistrettoPoint {
+    let mu = commitments.len();
+    assert!(t >= 1);
+    assert!(mu >= 2 * (t as usize) - 1);
+    assert!(mu == lag_polys.len());
+    assert!(mu == lag_polys[0].coeffs.len());
+
+    // Compute B_0 (which is the combined commitment) and return it
+    (0..mu)
+        .map(|j| lag_polys[j].coeffs[0] * commitments[j])
+        .sum()
+}
+
 // Combine commitments. Return None if the commitments are not
 // consistent with the given t.  You must pass at least 2t-1
 // commitments, and the same size of coalition.

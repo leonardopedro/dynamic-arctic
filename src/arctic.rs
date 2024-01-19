@@ -134,7 +134,7 @@ pub fn combine_polys(
 
     // Check the answer
 
-    let combcomm = shine::combinecomm_polys(t, lag_polys, commitments)?;
+    let combcomm = shine::combinecomm_polys_noverify(t, lag_polys, commitments);
     let c = hash2(&combcomm, pk, msg);
 
     if shine::commit(&z) == combcomm + c * pk {
