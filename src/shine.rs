@@ -6,6 +6,7 @@ use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::Identity;
 use curve25519_dalek::traits::VartimePrecomputedMultiscalarMul;
 use rand::RngCore;
+use sha2::digest::FixedOutput;
 use sha2::Digest;
 use sha2::Sha256;
 
@@ -25,7 +26,7 @@ fn hash1(theta: &[u8; 16], w: &[u8]) -> Scalar {
     hash.update(&theta);
     hash.update(&w);
     let mut hashval = [0u8; 32];
-    hashval[0..32].copy_from_slice(&hash.finalize());
+    hash.finalize_into((&mut hashval).into());
     Scalar::from_bytes_mod_order(hashval)
 }
 
