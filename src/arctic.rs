@@ -5,6 +5,8 @@ use curve25519_dalek::scalar::Scalar;
 use sha2::Digest;
 use sha2::Sha256;
 
+pub use crate::lagrange::lagrange_polys;
+
 type PubKey = RistrettoPoint;
 
 pub struct SecKey {

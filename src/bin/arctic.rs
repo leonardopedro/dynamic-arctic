@@ -47,7 +47,7 @@ fn main() {
     let mut rng = rand::thread_rng();
     msg.resize(msglen, 0);
     assert!(t >= 1);
-    assert!(coalitionsize >= 2*t-1);
+    assert!(coalitionsize >= 2 * t - 1);
     assert!(n >= coalitionsize);
 
     let (pubkey, mut seckeys) = arctic::keygen(n, t);
@@ -59,6 +59,7 @@ fn main() {
 
     let coalition = (1..=coalitionsize).collect::<Vec<u32>>();
     seckeys.truncate(coalitionsize as usize);
+    let polys = arctic::lagrange_polys(&coalition);
 
     for _ in 0..reps {
         rng.fill_bytes(&mut msg);
@@ -77,7 +78,8 @@ fn main() {
             .iter()
             .map(|key| {
                 let sign2start = Instant::now();
-                let sigshare = arctic::sign2(&pubkey, key, &coalition, &msg, &commits).unwrap();
+                let sigshare =
+                    arctic::sign2_polys(&pubkey, key, &coalition, &polys, &msg, &commits).unwrap();
                 let sign2dur = sign2start.elapsed().as_micros() as f64;
                 (sigshare, sign2dur)
             })
@@ -85,7 +87,8 @@ fn main() {
         sign2_timings.extend(sign2_iter_timings);
 
         let combinestart = Instant::now();
-        let sig = arctic::combine(&pubkey, t, &coalition, &msg, &commits, &sigshares).unwrap();
+        let sig = arctic::combine_polys(&pubkey, t, &coalition, &polys, &msg, &commits, &sigshares)
+            .unwrap();
         let combinedur = combinestart.elapsed().as_micros() as f64;
         combine_timings.push(combinedur);
 
