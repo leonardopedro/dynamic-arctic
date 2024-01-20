@@ -61,6 +61,9 @@ fn main() {
     seckeys.truncate(coalitionsize as usize);
     let polys = arctic::lagrange_polys(&coalition);
 
+    rayon::ThreadPoolBuilder::new().build_global().unwrap();
+    println!("# num_threads = {}", rayon::current_num_threads());
+
     for _ in 0..reps {
         rng.fill_bytes(&mut msg);
         let (r1_outputs, sign1_iter_timings): (Vec<R1Output>, Vec<f64>) = seckeys

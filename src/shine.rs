@@ -7,6 +7,7 @@ use curve25519_dalek::traits::Identity;
 use curve25519_dalek::traits::VartimePrecomputedMultiscalarMul;
 use itertools::Itertools;
 use rand::RngCore;
+use rayon::prelude::*;
 use sha2::digest::FixedOutput;
 use sha2::Digest;
 use sha2::Sha256;
@@ -134,7 +135,7 @@ impl PreprocKey {
     pub fn gen(&self, w: &[u8]) -> (Scalar, RistrettoPoint) {
         let d = self
             .secrets
-            .iter()
+            .par_iter()
             .map(|(phi, lagrange)| hash1(phi, w) * lagrange)
             .sum();
         (d, &d * &dalek_constants::RISTRETTO_BASEPOINT_TABLE)
