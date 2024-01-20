@@ -26,12 +26,9 @@ pub fn lagrange(coalition: &[u32], x: u32, target_x: u32) -> Scalar {
 // target_x must _not_ be in the x slice
 pub fn interpolate(x: &[u32], y: &[Scalar], target_x: u32) -> Scalar {
     assert!(x.len() == y.len());
-    let mut res = Scalar::zero();
-    for i in 0..x.len() {
-        let lag_coeff = lagrange(x, x[i], target_x);
-        res += lag_coeff * y[i];
-    }
-    res
+    (0..x.len())
+        .map(|i| lagrange(x, x[i], target_x) * y[i])
+        .sum()
 }
 
 // Versions that compute the entire Lagrange polynomials; these are used
@@ -222,9 +219,5 @@ pub fn test_lagrange_polys() {
 // Interpolate values at x=0 given the pre-computed Lagrange polynomials
 pub fn interpolate_polys_0(lag_polys: &[ScalarPoly], y: &[Scalar]) -> Scalar {
     assert!(lag_polys.len() == y.len());
-    let mut res = Scalar::zero();
-    for i in 0..y.len() {
-        res += lag_polys[i].coeffs[0] * y[i];
-    }
-    res
+    (0..y.len()).map(|i| lag_polys[i].coeffs[0] * y[i]).sum()
 }
