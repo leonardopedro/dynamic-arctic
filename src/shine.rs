@@ -1,8 +1,10 @@
 use crate::lagrange::*;
 use curve25519_dalek::constants as dalek_constants;
 use curve25519_dalek::ristretto::RistrettoPoint;
+use curve25519_dalek::ristretto::VartimeRistrettoPrecomputation;
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::Identity;
+use curve25519_dalek::traits::VartimePrecomputedMultiscalarMul;
 use rand::RngCore;
 use sha2::Digest;
 use sha2::Sha256;
@@ -219,15 +221,20 @@ pub fn combinecomm_polys(
     assert!(mu == lag_polys.len());
     assert!(mu == lag_polys[0].coeffs.len());
 
+    // Use this to compute the multiscalar multiplications
+    let multiscalar = VartimeRistrettoPrecomputation::new(Vec::<RistrettoPoint>::new());
+
     // Compute the B_i for i from t to mu-1.  All of them should be the
     // identity, so if any of them is not, then the commitments are
     // inconsistents, and we will return None
     if ((t as usize)..mu)
         .map(|i| {
             // B_i = \sum_j lag_polys[j].coeffs[i] * commitments[j]
-            (0..mu)
-                .map(|j| lag_polys[j].coeffs[i] * commitments[j])
-                .sum()
+            multiscalar.vartime_mixed_multiscalar_mul(
+                &Vec::<Scalar>::new(),
+                (0..mu).map(|j| lag_polys[j].coeffs[i]),
+                commitments,
+            )
         })
         .any(|bi: RistrettoPoint| bi != RistrettoPoint::identity())
     {
@@ -236,11 +243,11 @@ pub fn combinecomm_polys(
 
     // Compute B_0 (which is the combined commitment) and return
     // Some(B_0)
-    Some(
-        (0..mu)
-            .map(|j| lag_polys[j].coeffs[0] * commitments[j])
-            .sum(),
-    )
+    Some(multiscalar.vartime_mixed_multiscalar_mul(
+        &Vec::<Scalar>::new(),
+        (0..mu).map(|j| lag_polys[j].coeffs[0]),
+        commitments,
+    ))
 }
 
 // A version of the above that skips the verification.  This can be
@@ -257,10 +264,15 @@ pub fn combinecomm_polys_noverify(
     assert!(mu == lag_polys.len());
     assert!(mu == lag_polys[0].coeffs.len());
 
+    // Use this to compute the multiscalar multiplications
+    let multiscalar = VartimeRistrettoPrecomputation::new(Vec::<RistrettoPoint>::new());
+
     // Compute B_0 (which is the combined commitment) and return it
-    (0..mu)
-        .map(|j| lag_polys[j].coeffs[0] * commitments[j])
-        .sum()
+    multiscalar.vartime_mixed_multiscalar_mul(
+        &Vec::<Scalar>::new(),
+        (0..mu).map(|j| lag_polys[j].coeffs[0]),
+        commitments,
+    )
 }
 
 // Combine commitments. Return None if the commitments are not
