@@ -21,7 +21,7 @@ fn binom(m: u32, k: u32) -> u64 {
     numer / denom
 }
 
-fn hash1(theta: &[u8; 16], w: &[u8]) -> Scalar {
+fn hash1(theta: &[u8; 32], w: &[u8]) -> Scalar {
     let mut hash = Sha256::new();
     hash.update(&theta);
     hash.update(&w);
@@ -96,7 +96,7 @@ pub struct Key {
     pub n: u32,
     pub t: u32,
     pub k: u32,
-    pub secrets: Vec<(Vec<u32>, [u8; 16])>,
+    pub secrets: Vec<(Vec<u32>, [u8; 32])>,
 }
 
 impl Key {
@@ -116,7 +116,7 @@ impl Key {
         for v in si {
             // For each subset of size t-1, pick a random secret, and
             // give it to all players _not_ in that subset
-            let mut theta: [u8; 16] = [0; 16];
+            let mut theta: [u8; 32] = [0; 32];
             rng.fill_bytes(&mut theta);
             let mut vnextind = 0usize;
             let mut vnext = v[0];
@@ -152,7 +152,7 @@ pub struct PreprocKey {
     pub n: u32,
     pub t: u32,
     pub k: u32,
-    pub secrets: Vec<([u8; 16], Scalar)>,
+    pub secrets: Vec<([u8; 32], Scalar)>,
 }
 
 impl PreprocKey {
@@ -171,10 +171,10 @@ impl PreprocKey {
 
     pub fn rand(n: u32, t: u32) -> Self {
         let delta = binom(n - 1, t - 1);
-        let mut secrets: Vec<([u8; 16], Scalar)> = Vec::new();
+        let mut secrets: Vec<([u8; 32], Scalar)> = Vec::new();
         let mut rng = rand::thread_rng();
         for _ in 0u64..delta {
-            let mut theta = [0u8; 16];
+            let mut theta = [0u8; 32];
             rng.fill_bytes(&mut theta);
             let lagrange: Scalar = Scalar::random(&mut rng);
             secrets.push((theta, lagrange));
