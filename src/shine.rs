@@ -147,6 +147,56 @@ pub fn commit(evaluation: &Scalar) -> RistrettoPoint {
     evaluation * &dalek_constants::RISTRETTO_BASEPOINT_TABLE
 }
 
+// Verify that a set of commitments are consistent with a given t, using
+// precomputed Lagrange polynomials.  Return false if the commitments
+// are not consistent with the given t, or true if they are. You must
+// pass at least 2t-1 commitments, and the same number of lag_polys.
+pub fn verify_polys(
+    t: u32,
+    lag_polys: &[ScalarPoly],
+    commitments: &[RistrettoPoint],
+) -> bool {
+    // Check if the commitments are consistent: when interpolating the
+    // polys in the exponent, the low t coefficients can be non-0 but
+    // the ones above that must be 0
+
+    let coalition_size = commitments.len();
+    assert!(t >= 1);
+    assert!(coalition_size >= 2 * (t as usize) - 1);
+    assert!(coalition_size == lag_polys.len());
+    assert!(coalition_size == lag_polys[0].coeffs.len());
+
+    // Use this to compute the multiscalar multiplications
+    let multiscalar = VartimeRistrettoPrecomputation::new(Vec::<RistrettoPoint>::new());
+
+    // Compute the B_i for i from t to coalition_size-1.  All of them
+    // should be the identity; otherwise, the commitments are
+    // inconsistent.
+    ((t as usize)..coalition_size)
+        .map(|i| {
+            // B_i = \sum_j lag_polys[j].coeffs[i] * commitments[j]
+            multiscalar.vartime_mixed_multiscalar_mul(
+                &Vec::<Scalar>::new(),
+                (0..coalition_size).map(|j| lag_polys[j].coeffs[i]),
+                commitments,
+            )
+        })
+        .all(|bi: RistrettoPoint| bi == RistrettoPoint::identity())
+}
+
+// Verify that a set of commitments are consistent with a given t.
+// Return false if the commitments are not consistent with the given t,
+// or true if they are. You must pass at least 2t-1 commitments, and the
+// same number of lag_polys.
+pub fn verify(
+    t: u32,
+    coalition: &[u32],
+    commitments: &[RistrettoPoint],
+) -> bool {
+    let polys = lagrange_polys(coalition);
+    verify_polys(t, &polys, commitments)
+}
+
 // Combine commitments using precomputed Lagrange polynomials.  Return
 // None if the commitments are not consistent with the given t.  You
 // must pass at least 2t-1 commitments, and the same number of
@@ -156,41 +206,29 @@ pub fn combinecomm_polys(
     lag_polys: &[ScalarPoly],
     commitments: &[RistrettoPoint],
 ) -> Option<RistrettoPoint> {
+    let coalition_size = commitments.len();
+    assert!(t >= 1);
+    assert!(coalition_size >= 2 * (t as usize) - 1);
+    assert!(coalition_size == lag_polys.len());
+    assert!(coalition_size == lag_polys[0].coeffs.len());
+
     // Check if the commitments are consistent: when interpolating the
     // polys in the exponent, the low t coefficients can be non-0 but
     // the ones above that must be 0
 
-    let mu = commitments.len();
-    assert!(t >= 1);
-    assert!(mu >= 2 * (t as usize) - 1);
-    assert!(mu == lag_polys.len());
-    assert!(mu == lag_polys[0].coeffs.len());
-
-    // Use this to compute the multiscalar multiplications
-    let multiscalar = VartimeRistrettoPrecomputation::new(Vec::<RistrettoPoint>::new());
-
-    // Compute the B_i for i from t to mu-1.  All of them should be the
-    // identity, so if any of them is not, then the commitments are
-    // inconsistents, and we will return None
-    if ((t as usize)..mu)
-        .map(|i| {
-            // B_i = \sum_j lag_polys[j].coeffs[i] * commitments[j]
-            multiscalar.vartime_mixed_multiscalar_mul(
-                &Vec::<Scalar>::new(),
-                (0..mu).map(|j| lag_polys[j].coeffs[i]),
-                commitments,
-            )
-        })
-        .any(|bi: RistrettoPoint| bi != RistrettoPoint::identity())
-    {
+    if ! verify_polys(t, lag_polys, commitments) {
         return None;
     }
+
+     // Use this to compute the multiscalar multiplications
+     let multiscalar = VartimeRistrettoPrecomputation::new(Vec::<RistrettoPoint>
+::new());
 
     // Compute B_0 (which is the combined commitment) and return
     // Some(B_0)
     Some(multiscalar.vartime_mixed_multiscalar_mul(
         &Vec::<Scalar>::new(),
-        (0..mu).map(|j| lag_polys[j].coeffs[0]),
+        (0..coalition_size).map(|j| lag_polys[j].coeffs[0]),
         commitments,
     ))
 }
