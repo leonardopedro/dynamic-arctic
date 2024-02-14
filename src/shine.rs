@@ -130,11 +130,12 @@ impl PreprocKey {
         }
     }
 
-    pub fn gen(&self, w: &[u8]) -> Scalar {
-        self.secrets
+    pub fn gen(&self, w: &[u8]) -> (Scalar, RistrettoPoint) {
+        let d = self.secrets
             .iter()
             .map(|&(phi, lagrange)| hash1(&phi, w) * lagrange)
-            .sum()
+            .sum();
+        (d, &d * &dalek_constants::RISTRETTO_BASEPOINT_TABLE)
     }
 
     pub fn delta(&self) -> usize {
@@ -249,7 +250,7 @@ pub fn test_gen() {
     let mut rng = rand::thread_rng();
     let mut w = [0u8; 32];
     rng.fill_bytes(&mut w);
-    let evals: Vec<Scalar> = ppkeys.iter().map(|k| k.gen(&w)).collect();
+    let evals: Vec<Scalar> = ppkeys.iter().map(|k| k.gen(&w).0).collect();
 
     // Try interpolating different subsets and check that the answer is
     // the same
@@ -268,7 +269,7 @@ pub fn test_combinecomm() {
     let mut w = [0u8; 32];
     rng.fill_bytes(&mut w);
     let commitments: Vec<RistrettoPoint> =
-        ppkeys.iter().map(|k| commit(&k.gen(&w))).collect();
+        ppkeys.iter().map(|k| k.gen(&w).1).collect();
 
     let comm1 = combinecomm(3, &vec![1, 2, 3, 4, 5], &commitments[0..=4]);
     let comm2 = combinecomm(3, &vec![3, 4, 5, 6, 7], &commitments[2..=6]);

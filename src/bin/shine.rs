@@ -66,7 +66,7 @@ fn main() {
             .iter()
             .map(|rk| {
                 let evalstart = Instant::now();
-                let evaluation = rk.gen(&wvec);
+                let evaluation = rk.gen(&wvec).0;
                 let evaldur = evalstart.elapsed().as_micros() as f64;
                 (evaluation, evaldur)
             })
