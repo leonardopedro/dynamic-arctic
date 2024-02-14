@@ -5,6 +5,7 @@ use curve25519_dalek::ristretto::VartimeRistrettoPrecomputation;
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::Identity;
 use curve25519_dalek::traits::VartimePrecomputedMultiscalarMul;
+use itertools::Itertools;
 use rand::RngCore;
 use sha2::digest::FixedOutput;
 use sha2::Digest;
@@ -30,64 +31,6 @@ fn hash1(theta: &[u8; 32], w: &[u8]) -> Scalar {
     Scalar::from_bytes_mod_order(hashval)
 }
 
-// Iterate over subsets of {1, 2, ..., n} of size k
-struct SubsetIter {
-    n: u32,
-    k: u32,
-    done: bool,
-    nextsubset: Vec<u32>,
-}
-
-impl SubsetIter {
-    pub fn new(n: u32, k: u32) -> Self {
-        assert!(k >= 1);
-        assert!(n >= k);
-        let nextsubset: Vec<u32> = (1..=k).collect();
-        Self {
-            n,
-            k,
-            done: false,
-            nextsubset,
-        }
-    }
-}
-
-impl Iterator for SubsetIter {
-    type Item = Vec<u32>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut incindex: usize = 0;
-        let ku = self.k as usize;
-        let res = if self.done {
-            None
-        } else {
-            Some(self.nextsubset.clone())
-        };
-        while incindex < ku && self.nextsubset[ku - 1 - incindex] == self.n - (incindex as u32) {
-            incindex += 1;
-        }
-        if incindex < ku {
-            self.nextsubset[ku - 1 - incindex] += 1;
-            for i in 0..incindex {
-                self.nextsubset[ku - incindex + i] =
-                    self.nextsubset[ku - 1 - incindex] + (i as u32) + 1;
-            }
-        } else {
-            self.done = true;
-        }
-        res
-    }
-}
-
-#[test]
-pub fn test_subsetiter() {
-    let si = SubsetIter::new(7, 4);
-
-    for v in si {
-        println!("{:?}", v);
-    }
-}
-
 // The key for player k will consist of a vector of (v, theta) tuples,
 // where the v values enumerate all lists of t-1 player numbers (from
 // 1 to n) that do _not_ include k
@@ -111,7 +54,7 @@ impl Key {
                 secrets: Vec::new(),
             });
         }
-        let si = SubsetIter::new(n, t - 1);
+        let si = (1..=n).combinations((t - 1) as usize);
 
         for v in si {
             // For each subset of size t-1, pick a random secret, and
