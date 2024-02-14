@@ -50,7 +50,7 @@ fn main() {
 
     let keys: Vec<shine::PreprocKey> = shine::Key::keygen(n, t)
         .iter()
-        .map(|k| shine::PreprocKey::preproc(k))
+        .map(shine::PreprocKey::preproc)
         .collect();
     let delta = keys[0].delta();
 

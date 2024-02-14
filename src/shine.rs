@@ -24,8 +24,8 @@ fn binom(m: u32, k: u32) -> u64 {
 
 fn hash1(theta: &[u8; 32], w: &[u8]) -> Scalar {
     let mut hash = Sha256::new();
-    hash.update(&theta);
-    hash.update(&w);
+    hash.update(theta);
+    hash.update(w);
     let mut hashval = [0u8; 32];
     hash.finalize_into((&mut hashval).into());
     Scalar::from_bytes_mod_order(hashval)
@@ -67,7 +67,7 @@ impl Key {
                 if i < vnext {
                     res[(i - 1) as usize]
                         .secrets
-                        .push((v.clone(), theta.clone()));
+                        .push((v.clone(), theta));
                 } else {
                     vnextind += 1;
                     vnext = if vnextind < ((t - 1) as usize) {
@@ -107,7 +107,7 @@ impl PreprocKey {
             secrets: key
                 .secrets
                 .iter()
-                .map(|(v, theta)| (theta.clone(), lagrange(&v, 0, key.k)))
+                .map(|(v, theta)| (*theta, lagrange(v, 0, key.k)))
                 .collect(),
         }
     }
@@ -133,7 +133,7 @@ impl PreprocKey {
     pub fn partialeval(&self, w: &[u8]) -> Scalar {
         self.secrets
             .iter()
-            .map(|&(theta, lagrange)| hash1(&theta, &w) * lagrange)
+            .map(|&(theta, lagrange)| hash1(&theta, w) * lagrange)
             .sum()
     }
 
