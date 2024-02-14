@@ -24,6 +24,8 @@ pub fn lagrange(coalition: &[u32], x: u32, target_x: u32) -> Scalar {
 
 // Interpolate the given (x,y) coordinates at the target x value.
 // target_x must _not_ be in the x slice
+// We never actually use this function, but it's here for completeness
+#[allow(dead_code)]
 pub fn interpolate(x: &[u32], y: &[Scalar], target_x: u32) -> Scalar {
     assert!(x.len() == y.len());
     (0..x.len())
