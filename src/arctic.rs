@@ -72,7 +72,7 @@ fn hash3(pk: &PubKey, coalition: &[u32], msg: &[u8]) -> [u8; 32] {
 pub fn sign1(pk: &PubKey, sk: &SecKey, coalition: &[u32], msg: &[u8]) -> RistrettoPoint {
     assert!(coalition.len() >= 2 * (sk.t as usize) - 1);
     let w = hash3(pk, coalition, msg);
-    shine::commit(&sk.rk.partialeval(&w))
+    shine::commit(&sk.rk.gen(&w))
 }
 
 pub fn sign2_polys(
@@ -93,7 +93,7 @@ pub fn sign2_polys(
     let kindex = coalition.iter().position(|&k| k == sk.k).unwrap();
 
     let w = hash3(pk, coalition, msg);
-    let my_eval = sk.rk.partialeval(&w);
+    let my_eval = sk.rk.gen(&w);
     let my_commit = shine::commit(&my_eval);
 
     assert!(commitments[kindex] == my_commit);

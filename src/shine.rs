@@ -22,16 +22,16 @@ fn binom(m: u32, k: u32) -> u64 {
     numer / denom
 }
 
-fn hash1(theta: &[u8; 32], w: &[u8]) -> Scalar {
+fn hash1(phi: &[u8; 32], w: &[u8]) -> Scalar {
     let mut hash = Sha256::new();
-    hash.update(theta);
+    hash.update(phi);
     hash.update(w);
     let mut hashval = [0u8; 32];
     hash.finalize_into((&mut hashval).into());
     Scalar::from_bytes_mod_order(hashval)
 }
 
-// The key for player k will consist of a vector of (v, theta) tuples,
+// The key for player k will consist of a vector of (v, phi) tuples,
 // where the v values enumerate all lists of t-1 player numbers (from
 // 1 to n) that do _not_ include k
 #[derive(Debug)]
@@ -59,15 +59,15 @@ impl Key {
         for v in si {
             // For each subset of size t-1, pick a random secret, and
             // give it to all players _not_ in that subset
-            let mut theta: [u8; 32] = [0; 32];
-            rng.fill_bytes(&mut theta);
+            let mut phi: [u8; 32] = [0; 32];
+            rng.fill_bytes(&mut phi);
             let mut vnextind = 0usize;
             let mut vnext = v[0];
             for i in 1..=n {
                 if i < vnext {
                     res[(i - 1) as usize]
                         .secrets
-                        .push((v.clone(), theta));
+                        .push((v.clone(), phi));
                 } else {
                     vnextind += 1;
                     vnext = if vnextind < ((t - 1) as usize) {
@@ -107,7 +107,7 @@ impl PreprocKey {
             secrets: key
                 .secrets
                 .iter()
-                .map(|(v, theta)| (*theta, lagrange(v, 0, key.k)))
+                .map(|(v, phi)| (*phi, lagrange(v, 0, key.k)))
                 .collect(),
         }
     }
@@ -117,10 +117,10 @@ impl PreprocKey {
         let mut secrets: Vec<([u8; 32], Scalar)> = Vec::new();
         let mut rng = rand::thread_rng();
         for _ in 0u64..delta {
-            let mut theta = [0u8; 32];
-            rng.fill_bytes(&mut theta);
+            let mut phi = [0u8; 32];
+            rng.fill_bytes(&mut phi);
             let lagrange: Scalar = Scalar::random(&mut rng);
-            secrets.push((theta, lagrange));
+            secrets.push((phi, lagrange));
         }
         Self {
             n,
@@ -130,10 +130,10 @@ impl PreprocKey {
         }
     }
 
-    pub fn partialeval(&self, w: &[u8]) -> Scalar {
+    pub fn gen(&self, w: &[u8]) -> Scalar {
         self.secrets
             .iter()
-            .map(|&(theta, lagrange)| hash1(&theta, w) * lagrange)
+            .map(|&(phi, lagrange)| hash1(&phi, w) * lagrange)
             .sum()
     }
 
@@ -243,13 +243,13 @@ pub fn test_preproc() {
 }
 
 #[test]
-pub fn test_partialeval() {
+pub fn test_gen() {
     let keys = Key::keygen(7, 3);
     let ppkeys: Vec<PreprocKey> = keys.iter().map(|x| PreprocKey::preproc(x)).collect();
     let mut rng = rand::thread_rng();
     let mut w = [0u8; 32];
     rng.fill_bytes(&mut w);
-    let evals: Vec<Scalar> = ppkeys.iter().map(|k| k.partialeval(&w)).collect();
+    let evals: Vec<Scalar> = ppkeys.iter().map(|k| k.gen(&w)).collect();
 
     // Try interpolating different subsets and check that the answer is
     // the same
@@ -268,7 +268,7 @@ pub fn test_combinecomm() {
     let mut w = [0u8; 32];
     rng.fill_bytes(&mut w);
     let commitments: Vec<RistrettoPoint> =
-        ppkeys.iter().map(|k| commit(&k.partialeval(&w))).collect();
+        ppkeys.iter().map(|k| commit(&k.gen(&w))).collect();
 
     let comm1 = combinecomm(3, &vec![1, 2, 3, 4, 5], &commitments[0..=4]);
     let comm2 = combinecomm(3, &vec![3, 4, 5, 6, 7], &commitments[2..=6]);
