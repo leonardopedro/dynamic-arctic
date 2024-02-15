@@ -79,7 +79,8 @@ fn main() {
             .map(|key| {
                 let sign2start = Instant::now();
                 let sigshare =
-                    arctic::sign2_polys(&pubkey, key, &coalition, &polys, &msg, &r1_outputs).unwrap();
+                    arctic::sign2_polys(&pubkey, key, &coalition, &polys, &msg, &r1_outputs)
+                        .unwrap();
                 let sign2dur = sign2start.elapsed().as_micros() as f64;
                 (sigshare, sign2dur)
             })
@@ -87,8 +88,16 @@ fn main() {
         sign2_timings.extend(sign2_iter_timings);
 
         let combinestart = Instant::now();
-        let sig = arctic::combine_polys(&pubkey, t, &coalition, &polys, &msg, &r1_outputs, &sigshares)
-            .unwrap();
+        let sig = arctic::combine_polys(
+            &pubkey,
+            t,
+            &coalition,
+            &polys,
+            &msg,
+            &r1_outputs,
+            &sigshares,
+        )
+        .unwrap();
         let combinedur = combinestart.elapsed().as_micros() as f64;
         combine_timings.push(combinedur);
 

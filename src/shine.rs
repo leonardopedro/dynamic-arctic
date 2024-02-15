@@ -67,9 +67,7 @@ impl Key {
             let mut vnext = v[0];
             for i in 1..=n {
                 if i < vnext {
-                    res[(i - 1) as usize]
-                        .secrets
-                        .push((v.clone(), phi));
+                    res[(i - 1) as usize].secrets.push((v.clone(), phi));
                 } else {
                     vnextind += 1;
                     vnext = if vnextind < ((t - 1) as usize) {
@@ -133,7 +131,8 @@ impl PreprocKey {
     }
 
     pub fn gen(&self, w: &[u8]) -> (Scalar, RistrettoPoint) {
-        let d = self.secrets
+        let d = self
+            .secrets
             .iter()
             .map(|&(phi, lagrange)| hash1(&phi, w) * lagrange)
             .sum();
@@ -153,11 +152,7 @@ pub fn commit(evaluation: &Scalar) -> RistrettoPoint {
 // precomputed Lagrange polynomials.  Return false if the commitments
 // are not consistent with the given t, or true if they are. You must
 // pass at least 2t-1 commitments, and the same number of lag_polys.
-pub fn verify_polys(
-    t: u32,
-    lag_polys: &[ScalarPoly],
-    commitments: &[RistrettoPoint],
-) -> bool {
+pub fn verify_polys(t: u32, lag_polys: &[ScalarPoly], commitments: &[RistrettoPoint]) -> bool {
     // Check if the commitments are consistent: when interpolating the
     // polys in the exponent, the low t coefficients can be non-0 but
     // the ones above that must be 0
@@ -190,11 +185,7 @@ pub fn verify_polys(
 // Return false if the commitments are not consistent with the given t,
 // or true if they are. You must pass at least 2t-1 commitments, and the
 // same number of lag_polys.
-pub fn verify(
-    t: u32,
-    coalition: &[u32],
-    commitments: &[RistrettoPoint],
-) -> bool {
+pub fn verify(t: u32, coalition: &[u32], commitments: &[RistrettoPoint]) -> bool {
     let polys = lagrange_polys(coalition);
     verify_polys(t, &polys, commitments)
 }
@@ -226,11 +217,7 @@ pub fn agg_polys(
 
 // Combine already-verified commitments. You must pass at least 2t-1
 // commitments, and the same number of lag_polys.
-pub fn agg(
-    t: u32,
-    coalition: &[u32],
-    commitments: &[RistrettoPoint],
-) -> RistrettoPoint {
+pub fn agg(t: u32, coalition: &[u32], commitments: &[RistrettoPoint]) -> RistrettoPoint {
     let polys = lagrange_polys(coalition);
     agg_polys(t, &polys, commitments)
 }
@@ -255,7 +242,7 @@ pub fn combinecomm_polys(
     // polys in the exponent, the low t coefficients can be non-0 but
     // the ones above that must be 0
 
-    if ! verify_polys(t, lag_polys, commitments) {
+    if !verify_polys(t, lag_polys, commitments) {
         return None;
     }
 
@@ -312,8 +299,7 @@ pub fn test_combinecomm() {
     let mut rng = rand::thread_rng();
     let mut w = [0u8; 32];
     rng.fill_bytes(&mut w);
-    let commitments: Vec<RistrettoPoint> =
-        ppkeys.iter().map(|k| k.gen(&w).1).collect();
+    let commitments: Vec<RistrettoPoint> = ppkeys.iter().map(|k| k.gen(&w).1).collect();
 
     let comm1 = combinecomm(3, &vec![1, 2, 3, 4, 5], &commitments[0..=4]);
     let comm2 = combinecomm(3, &vec![3, 4, 5, 6, 7], &commitments[2..=6]);

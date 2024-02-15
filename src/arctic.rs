@@ -45,16 +45,13 @@ pub fn keygen(n: u32, t: u32) -> (PubKey, Vec<PubKey>, Vec<SecKey>) {
     // The signature key shares
     let shamirpoly = ScalarPoly::rand((t as usize) - 1);
     let group_pubkey = shine::commit(&shamirpoly.coeffs[0]);
-    let signkeys : Vec<Scalar> = (1..=n)
-        .map(|k| shamirpoly.eval(&Scalar::from(k)))
-        .collect();
-    let player_pubkeys : Vec<PubKey> = signkeys
-        .iter().map(shine::commit).collect();
+    let signkeys: Vec<Scalar> = (1..=n).map(|k| shamirpoly.eval(&Scalar::from(k))).collect();
+    let player_pubkeys: Vec<PubKey> = signkeys.iter().map(shine::commit).collect();
     for k in 1..=n {
         seckeys.push(SecKey {
             t,
             k,
-            sk: signkeys[(k-1) as usize],
+            sk: signkeys[(k - 1) as usize],
             shine_key: shine::PreprocKey::preproc(&shinekeys[(k as usize) - 1]),
             pk: group_pubkey,
         });
@@ -128,9 +125,11 @@ pub fn sign2_polys(
     let (my_eval, my_commit) = sk.shine_key.gen(&y);
     assert!(r1_outputs[kindex].1 == my_commit);
 
-    let commitments : Vec<RistrettoPoint> =
-        r1_outputs.iter().map(|(_,commitment)| *commitment).collect();
-    if ! shine::verify_polys(sk.t, lag_polys, &commitments) {
+    let commitments: Vec<RistrettoPoint> = r1_outputs
+        .iter()
+        .map(|(_, commitment)| *commitment)
+        .collect();
+    if !shine::verify_polys(sk.t, lag_polys, &commitments) {
         return None;
     }
     let combcomm = shine::agg_polys(sk.t, lag_polys, &commitments);
@@ -164,8 +163,10 @@ pub fn combine_polys(
     assert!(coalition.len() == sigshares.len());
     assert!(coalition.len() >= 2 * (t as usize) - 1);
 
-    let commitments : Vec<RistrettoPoint> =
-        r1_outputs.iter().map(|(_,commitment)| *commitment).collect();
+    let commitments: Vec<RistrettoPoint> = r1_outputs
+        .iter()
+        .map(|(_, commitment)| *commitment)
+        .collect();
     let combcomm = shine::agg_polys(t, lag_polys, &commitments);
     let c = hash3(&combcomm, pk, msg);
 
@@ -270,7 +271,10 @@ pub fn test_arctic_bad2() {
 
     // Player 2 should return None because the commitments are
     // inconsistent
-    assert_eq!(sign2(&pubkey, &seckeys[1], &coalition, msg, &r1_outputs), None);
+    assert_eq!(
+        sign2(&pubkey, &seckeys[1], &coalition, msg, &r1_outputs),
+        None
+    );
 }
 
 #[test]
@@ -294,7 +298,10 @@ pub fn test_arctic_bad3() {
 
     // Player 2 should return None because the y values are
     // inconsistent
-    assert_eq!(sign2(&pubkey, &seckeys[1], &coalition, msg, &r1_outputs), None);
+    assert_eq!(
+        sign2(&pubkey, &seckeys[1], &coalition, msg, &r1_outputs),
+        None
+    );
 }
 
 #[test]
@@ -318,7 +325,10 @@ pub fn test_arctic_bad4() {
 
     // Player 2 should return None because the y values are
     // inconsistent
-    assert_eq!(sign2(&pubkey, &seckeys[1], &coalition, msg2, &r1_outputs), None);
+    assert_eq!(
+        sign2(&pubkey, &seckeys[1], &coalition, msg2, &r1_outputs),
+        None
+    );
 }
 
 #[test]
