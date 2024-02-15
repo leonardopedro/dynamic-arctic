@@ -94,9 +94,9 @@ pub fn sign1(sk: &SecKey, coalition: &[u32], msg: &[u8]) -> R1Output {
 }
 
 // The second round of the signature protocol.  Note: it is vital that
-// the ([u8;32], RistrettoPoint) received from all the parties' first
-// round were received over authenticated channels.  If an adversary can
-// forge honest parties' round one messages, Arctic is _not_ secure.
+// the R1Output values received from all the parties' first round were
+// received over authenticated channels.  If an adversary can forge
+// honest parties' round one messages, Arctic is _not_ secure.
 pub fn sign2_polys(
     pk: &PubKey,
     sk: &SecKey,
@@ -114,23 +114,26 @@ pub fn sign2_polys(
     // Find my own entry in the coalition; abort if it's not there
     let kindex = coalition.iter().position(|&k| k == sk.k).unwrap();
 
+    // If the inputs are just corrupt values from malicious other
+    // parties, return None but don't crash
+
     let y = hash2(pk, msg);
 
     // Make sure all the parties are submitting commitments for the same
     // y (the same pk and msg).
-    if r1_outputs.iter().any(|(yk, _)| yk != &y) {
+    if r1_outputs.iter().any(|(yj, _)| yj != &y) {
         return None;
     }
 
     let (my_eval, my_commit) = sk.shine_key.gen(&y);
     assert!(r1_outputs[kindex].1 == my_commit);
 
-    // If the inputs are just corrupt values from malicious other
-    // parties, return None but don't crash
-
     let commitments : Vec<RistrettoPoint> =
         r1_outputs.iter().map(|(_,commitment)| *commitment).collect();
-    let combcomm = shine::combinecomm_polys(sk.t, lag_polys, &commitments)?;
+    if ! shine::verify_polys(sk.t, lag_polys, &commitments) {
+        return None;
+    }
+    let combcomm = shine::agg_polys(sk.t, lag_polys, &commitments);
     let c = hash3(&combcomm, pk, msg);
 
     Some(my_eval + c * sk.sk)
