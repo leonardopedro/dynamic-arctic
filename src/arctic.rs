@@ -48,17 +48,7 @@ pub fn keygen(n: u32, t: u32) -> (PubKey, Vec<SecKey>) {
     (pubkey, seckeys)
 }
 
-fn hash2(combcomm: &RistrettoPoint, pk: &PubKey, msg: &[u8]) -> Scalar {
-    let mut hash = Sha256::new();
-    hash.update(combcomm.compress().as_bytes());
-    hash.update(pk.compress().as_bytes());
-    hash.update(msg);
-    let mut hashval = [0u8; 32];
-    hashval[0..32].copy_from_slice(&hash.finalize());
-    Scalar::from_bytes_mod_order(hashval)
-}
-
-fn hash3(pk: &PubKey, coalition: &[u32], msg: &[u8]) -> [u8; 32] {
+fn hash2(pk: &PubKey, coalition: &[u32], msg: &[u8]) -> [u8; 32] {
     let mut hash = Sha256::new();
     hash.update(pk.compress().as_bytes());
     hash.update(coalition.len().to_le_bytes());
@@ -69,9 +59,19 @@ fn hash3(pk: &PubKey, coalition: &[u32], msg: &[u8]) -> [u8; 32] {
     hash.finalize().into()
 }
 
+fn hash3(combcomm: &RistrettoPoint, pk: &PubKey, msg: &[u8]) -> Scalar {
+    let mut hash = Sha256::new();
+    hash.update(combcomm.compress().as_bytes());
+    hash.update(pk.compress().as_bytes());
+    hash.update(msg);
+    let mut hashval = [0u8; 32];
+    hashval[0..32].copy_from_slice(&hash.finalize());
+    Scalar::from_bytes_mod_order(hashval)
+}
+
 pub fn sign1(pk: &PubKey, sk: &SecKey, coalition: &[u32], msg: &[u8]) -> RistrettoPoint {
     assert!(coalition.len() >= 2 * (sk.t as usize) - 1);
-    let w = hash3(pk, coalition, msg);
+    let w = hash2(pk, coalition, msg);
     sk.rk.gen(&w).1
 }
 
@@ -92,7 +92,7 @@ pub fn sign2_polys(
     // Find my own entry in the coalition; abort if it's not there
     let kindex = coalition.iter().position(|&k| k == sk.k).unwrap();
 
-    let w = hash3(pk, coalition, msg);
+    let w = hash2(pk, coalition, msg);
     let (my_eval, my_commit) = sk.rk.gen(&w);
 
     assert!(commitments[kindex] == my_commit);
@@ -101,7 +101,7 @@ pub fn sign2_polys(
     // parties, return None but don't crash
 
     let combcomm = shine::combinecomm_polys(sk.t, lag_polys, commitments)?;
-    let c = hash2(&combcomm, pk, msg);
+    let c = hash3(&combcomm, pk, msg);
 
     Some(my_eval + c * sk.sk)
 }
@@ -136,7 +136,7 @@ pub fn combine_polys(
     // Check the answer
 
     let combcomm = shine::agg_polys(t, lag_polys, commitments);
-    let c = hash2(&combcomm, pk, msg);
+    let c = hash3(&combcomm, pk, msg);
 
     if shine::commit(&z) == combcomm + c * pk {
         return Some((combcomm, z));
@@ -157,7 +157,7 @@ pub fn combine(
 }
 
 pub fn verify(pk: &PubKey, msg: &[u8], sig: &Signature) -> bool {
-    let c = hash2(&sig.0, pk, msg);
+    let c = hash3(&sig.0, pk, msg);
     shine::commit(&sig.1) == sig.0 + c * pk
 }
 
