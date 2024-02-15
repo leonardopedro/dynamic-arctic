@@ -199,54 +199,6 @@ pub fn verify(
     verify_polys(t, &polys, commitments)
 }
 
-// Combine commitments using precomputed Lagrange polynomials.  Return
-// None if the commitments are not consistent with the given t.  You
-// must pass at least 2t-1 commitments, and the same number of
-// lag_polys.
-pub fn combinecomm_polys(
-    t: u32,
-    lag_polys: &[ScalarPoly],
-    commitments: &[RistrettoPoint],
-) -> Option<RistrettoPoint> {
-    let coalition_size = commitments.len();
-    assert!(t >= 1);
-    assert!(coalition_size >= 2 * (t as usize) - 1);
-    assert!(coalition_size == lag_polys.len());
-    assert!(coalition_size == lag_polys[0].coeffs.len());
-
-    // Check if the commitments are consistent: when interpolating the
-    // polys in the exponent, the low t coefficients can be non-0 but
-    // the ones above that must be 0
-
-    if ! verify_polys(t, lag_polys, commitments) {
-        return None;
-    }
-
-     // Use this to compute the multiscalar multiplications
-     let multiscalar = VartimeRistrettoPrecomputation::new(Vec::<RistrettoPoint>
-::new());
-
-    // Compute B_0 (which is the combined commitment) and return
-    // Some(B_0)
-    Some(multiscalar.vartime_mixed_multiscalar_mul(
-        &Vec::<Scalar>::new(),
-        (0..coalition_size).map(|j| lag_polys[j].coeffs[0]),
-        commitments,
-    ))
-}
-
-// Combine commitments. Return None if the commitments are not
-// consistent with the given t.  You must pass at least 2t-1
-// commitments, and the same size of coalition.
-pub fn combinecomm(
-    t: u32,
-    coalition: &[u32],
-    commitments: &[RistrettoPoint],
-) -> Option<RistrettoPoint> {
-    let polys = lagrange_polys(coalition);
-    combinecomm_polys(t, &polys, commitments)
-}
-
 // Combine already-verified commitments using precomputed Lagrange
 // polynomials.  You must pass at least 2t-1 commitments, and the same
 // number of lag_polys.
@@ -281,6 +233,47 @@ pub fn agg(
 ) -> RistrettoPoint {
     let polys = lagrange_polys(coalition);
     agg_polys(t, &polys, commitments)
+}
+
+// Combine commitments using precomputed Lagrange polynomials.  Return
+// None if the commitments are not consistent with the given t.  You
+// must pass at least 2t-1 commitments, and the same number of
+// lag_polys.  This function combines verify_polys and agg_polys into a
+// single call that returns Option<RistrettoPoint>.
+pub fn combinecomm_polys(
+    t: u32,
+    lag_polys: &[ScalarPoly],
+    commitments: &[RistrettoPoint],
+) -> Option<RistrettoPoint> {
+    let coalition_size = commitments.len();
+    assert!(t >= 1);
+    assert!(coalition_size >= 2 * (t as usize) - 1);
+    assert!(coalition_size == lag_polys.len());
+    assert!(coalition_size == lag_polys[0].coeffs.len());
+
+    // Check if the commitments are consistent: when interpolating the
+    // polys in the exponent, the low t coefficients can be non-0 but
+    // the ones above that must be 0
+
+    if ! verify_polys(t, lag_polys, commitments) {
+        return None;
+    }
+
+    Some(agg_polys(t, lag_polys, commitments))
+}
+
+// Combine commitments. Return None if the commitments are not
+// consistent with the given t.  You must pass at least 2t-1
+// commitments, and the same size of coalition.  This function combines
+// verify and agg into a single call that returns
+// Option<RistrettoPoint>.
+pub fn combinecomm(
+    t: u32,
+    coalition: &[u32],
+    commitments: &[RistrettoPoint],
+) -> Option<RistrettoPoint> {
+    let polys = lagrange_polys(coalition);
+    combinecomm_polys(t, &polys, commitments)
 }
 
 #[test]
