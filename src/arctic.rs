@@ -48,13 +48,9 @@ pub fn keygen(n: u32, t: u32) -> (PubKey, Vec<SecKey>) {
     (pubkey, seckeys)
 }
 
-fn hash2(pk: &PubKey, coalition: &[u32], msg: &[u8]) -> [u8; 32] {
+fn hash2(pk: &PubKey, msg: &[u8]) -> [u8; 32] {
     let mut hash = Sha256::new();
     hash.update(pk.compress().as_bytes());
-    hash.update(coalition.len().to_le_bytes());
-    for c in coalition {
-        hash.update(c.to_le_bytes());
-    }
     hash.update(msg);
     hash.finalize().into()
 }
@@ -71,7 +67,7 @@ fn hash3(combcomm: &RistrettoPoint, pk: &PubKey, msg: &[u8]) -> Scalar {
 
 pub fn sign1(pk: &PubKey, sk: &SecKey, coalition: &[u32], msg: &[u8]) -> RistrettoPoint {
     assert!(coalition.len() >= 2 * (sk.t as usize) - 1);
-    let w = hash2(pk, coalition, msg);
+    let w = hash2(pk, msg);
     sk.rk.gen(&w).1
 }
 
@@ -92,7 +88,7 @@ pub fn sign2_polys(
     // Find my own entry in the coalition; abort if it's not there
     let kindex = coalition.iter().position(|&k| k == sk.k).unwrap();
 
-    let w = hash2(pk, coalition, msg);
+    let w = hash2(pk, msg);
     let (my_eval, my_commit) = sk.rk.gen(&w);
 
     assert!(commitments[kindex] == my_commit);
