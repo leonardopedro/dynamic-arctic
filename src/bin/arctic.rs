@@ -50,7 +50,7 @@ fn main() {
     assert!(coalitionsize >= 2 * t - 1);
     assert!(n >= coalitionsize);
 
-    let (pubkey, mut seckeys) = arctic::keygen(n, t);
+    let (pubkey, _, mut seckeys) = arctic::keygen(n, t);
     let delta = seckeys[0].delta();
 
     let mut sign1_timings: Vec<f64> = Vec::new();

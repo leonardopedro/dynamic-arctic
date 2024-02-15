@@ -12,20 +12,27 @@ type PubKey = RistrettoPoint;
 pub struct SecKey {
     t: u32,
     k: u32,
+    // This player's signature key share
     sk: Scalar,
-    rk: shine::PreprocKey,
+    // This player's Shine key share
+    shine_key: shine::PreprocKey,
+    // The group public key
     pk: PubKey,
 }
 
 impl SecKey {
     pub fn delta(&self) -> usize {
-        self.rk.delta()
+        self.shine_key.delta()
     }
 }
 
 type Signature = (RistrettoPoint, Scalar);
 
-pub fn keygen(n: u32, t: u32) -> (PubKey, Vec<SecKey>) {
+// Generate Arctic keys using a trusted dealer.  The output is the group
+// public key, a vector of each individual player's public key (unused
+// except in the robust Arctic case), and a vector of each individual
+// player's Arctic secret key.
+pub fn keygen(n: u32, t: u32) -> (PubKey, Vec<PubKey>, Vec<SecKey>) {
     assert!(t >= 1);
     assert!(n >= 2 * t - 1);
 
@@ -36,18 +43,23 @@ pub fn keygen(n: u32, t: u32) -> (PubKey, Vec<SecKey>) {
 
     // The signature key shares
     let shamirpoly = ScalarPoly::rand((t as usize) - 1);
-    let pubkey = shine::commit(&shamirpoly.coeffs[0]);
+    let group_pubkey = shine::commit(&shamirpoly.coeffs[0]);
+    let signkeys : Vec<Scalar> = (1..=n)
+        .map(|k| shamirpoly.eval(&Scalar::from(k)))
+        .collect();
+    let player_pubkeys : Vec<PubKey> = signkeys
+        .iter().map(shine::commit).collect();
     for k in 1..=n {
         seckeys.push(SecKey {
             t,
             k,
-            sk: shamirpoly.eval(&Scalar::from(k)),
-            rk: shine::PreprocKey::preproc(&shinekeys[(k as usize) - 1]),
-            pk: pubkey,
+            sk: signkeys[(k-1) as usize],
+            shine_key: shine::PreprocKey::preproc(&shinekeys[(k as usize) - 1]),
+            pk: group_pubkey,
         });
     }
 
-    (pubkey, seckeys)
+    (group_pubkey, player_pubkeys, seckeys)
 }
 
 fn hash2(pk: &PubKey, msg: &[u8]) -> [u8; 32] {
@@ -70,7 +82,7 @@ fn hash3(combcomm: &RistrettoPoint, pk: &PubKey, msg: &[u8]) -> Scalar {
 pub fn sign1(sk: &SecKey, coalition: &[u32], msg: &[u8]) -> RistrettoPoint {
     assert!(coalition.len() >= 2 * (sk.t as usize) - 1);
     let w = hash2(&sk.pk, msg);
-    sk.rk.gen(&w).1
+    sk.shine_key.gen(&w).1
 }
 
 pub fn sign2_polys(
@@ -91,7 +103,7 @@ pub fn sign2_polys(
     let kindex = coalition.iter().position(|&k| k == sk.k).unwrap();
 
     let w = hash2(pk, msg);
-    let (my_eval, my_commit) = sk.rk.gen(&w);
+    let (my_eval, my_commit) = sk.shine_key.gen(&w);
 
     assert!(commitments[kindex] == my_commit);
 
@@ -164,7 +176,7 @@ pub fn test_arctic_good() {
     let n = 7u32;
     let t = 4u32;
 
-    let (pubkey, seckeys) = keygen(n, t);
+    let (pubkey, _, seckeys) = keygen(n, t);
 
     let coalition = (1..=n).collect::<Vec<u32>>();
 
@@ -191,7 +203,7 @@ pub fn test_arctic_bad1() {
     let n = 7u32;
     let t = 4u32;
 
-    let (pubkey, seckeys) = keygen(n, t);
+    let (pubkey, _, seckeys) = keygen(n, t);
 
     let coalition = (1..=n).collect::<Vec<u32>>();
 
@@ -216,7 +228,7 @@ pub fn test_arctic_bad2() {
     let n = 7u32;
     let t = 4u32;
 
-    let (pubkey, seckeys) = keygen(n, t);
+    let (pubkey, _, seckeys) = keygen(n, t);
 
     let coalition = (1..=n).collect::<Vec<u32>>();
 
@@ -241,7 +253,7 @@ pub fn test_arctic_bad3() {
     let n = 7u32;
     let t = 4u32;
 
-    let (pubkey, seckeys) = keygen(n, t);
+    let (pubkey, _, seckeys) = keygen(n, t);
 
     let coalition = (1..=n).collect::<Vec<u32>>();
 
@@ -273,7 +285,7 @@ pub fn test_arctic_bad4() {
     let n = 7u32;
     let t = 4u32;
 
-    let (pubkey, seckeys) = keygen(n, t);
+    let (pubkey, _, seckeys) = keygen(n, t);
 
     let coalition = (1..=n).collect::<Vec<u32>>();
 
