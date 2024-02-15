@@ -233,31 +233,6 @@ pub fn combinecomm_polys(
     ))
 }
 
-// A version of the above that skips the verification.  This can be
-// used, for example, if you can check that the output is correct by
-// verifying a signature.
-pub fn combinecomm_polys_noverify(
-    t: u32,
-    lag_polys: &[ScalarPoly],
-    commitments: &[RistrettoPoint],
-) -> RistrettoPoint {
-    let mu = commitments.len();
-    assert!(t >= 1);
-    assert!(mu >= 2 * (t as usize) - 1);
-    assert!(mu == lag_polys.len());
-    assert!(mu == lag_polys[0].coeffs.len());
-
-    // Use this to compute the multiscalar multiplications
-    let multiscalar = VartimeRistrettoPrecomputation::new(Vec::<RistrettoPoint>::new());
-
-    // Compute B_0 (which is the combined commitment) and return it
-    multiscalar.vartime_mixed_multiscalar_mul(
-        &Vec::<Scalar>::new(),
-        (0..mu).map(|j| lag_polys[j].coeffs[0]),
-        commitments,
-    )
-}
-
 // Combine commitments. Return None if the commitments are not
 // consistent with the given t.  You must pass at least 2t-1
 // commitments, and the same size of coalition.
@@ -268,6 +243,42 @@ pub fn combinecomm(
 ) -> Option<RistrettoPoint> {
     let polys = lagrange_polys(coalition);
     combinecomm_polys(t, &polys, commitments)
+}
+
+// Combine already-verified commitments using precomputed Lagrange
+// polynomials.  You must pass at least 2t-1 commitments, and the same
+// number of lag_polys.
+pub fn agg_polys(
+    t: u32,
+    lag_polys: &[ScalarPoly],
+    commitments: &[RistrettoPoint],
+) -> RistrettoPoint {
+    let coalition_size = commitments.len();
+    assert!(t >= 1);
+    assert!(coalition_size >= 2 * (t as usize) - 1);
+    assert!(coalition_size == lag_polys.len());
+    assert!(coalition_size == lag_polys[0].coeffs.len());
+
+    // Use this to compute the multiscalar multiplications
+    let multiscalar = VartimeRistrettoPrecomputation::new(Vec::<RistrettoPoint>::new());
+
+    // Compute B_0 (which is the combined commitment) and return it
+    multiscalar.vartime_mixed_multiscalar_mul(
+        &Vec::<Scalar>::new(),
+        (0..coalition_size).map(|j| lag_polys[j].coeffs[0]),
+        commitments,
+    )
+}
+
+// Combine already-verified commitments. You must pass at least 2t-1
+// commitments, and the same number of lag_polys.
+pub fn agg(
+    t: u32,
+    coalition: &[u32],
+    commitments: &[RistrettoPoint],
+) -> RistrettoPoint {
+    let polys = lagrange_polys(coalition);
+    agg_polys(t, &polys, commitments)
 }
 
 #[test]
