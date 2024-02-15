@@ -164,14 +164,14 @@ pub fn combine_polys(
     assert!(coalition.len() == sigshares.len());
     assert!(coalition.len() >= 2 * (t as usize) - 1);
 
-    let z = interpolate_polys_0(lag_polys, sigshares);
-
-    // Check the answer
-
     let commitments : Vec<RistrettoPoint> =
         r1_outputs.iter().map(|(_,commitment)| *commitment).collect();
     let combcomm = shine::agg_polys(t, lag_polys, &commitments);
     let c = hash3(&combcomm, pk, msg);
+
+    let z = interpolate_polys_0(lag_polys, sigshares);
+
+    // Check the answer
 
     if shine::commit(&z) == combcomm + c * pk {
         return Some((combcomm, z));
