@@ -1,5 +1,5 @@
 use arctic::arctic;
-use curve25519_dalek::ristretto::RistrettoPoint;
+use arctic::R1Output;
 use curve25519_dalek::scalar::Scalar;
 use rand::RngCore;
 use std::env;
@@ -63,13 +63,13 @@ fn main() {
 
     for _ in 0..reps {
         rng.fill_bytes(&mut msg);
-        let (commits, sign1_iter_timings): (Vec<RistrettoPoint>, Vec<f64>) = seckeys
+        let (r1_outputs, sign1_iter_timings): (Vec<R1Output>, Vec<f64>) = seckeys
             .iter()
             .map(|key| {
                 let sign1start = Instant::now();
-                let commitment = arctic::sign1(key, &coalition, &msg);
+                let r1_output = arctic::sign1(key, &coalition, &msg);
                 let sign1dur = sign1start.elapsed().as_micros() as f64;
-                (commitment, sign1dur)
+                (r1_output, sign1dur)
             })
             .unzip();
         sign1_timings.extend(sign1_iter_timings);
@@ -79,7 +79,7 @@ fn main() {
             .map(|key| {
                 let sign2start = Instant::now();
                 let sigshare =
-                    arctic::sign2_polys(&pubkey, key, &coalition, &polys, &msg, &commits).unwrap();
+                    arctic::sign2_polys(&pubkey, key, &coalition, &polys, &msg, &r1_outputs).unwrap();
                 let sign2dur = sign2start.elapsed().as_micros() as f64;
                 (sigshare, sign2dur)
             })
@@ -87,7 +87,7 @@ fn main() {
         sign2_timings.extend(sign2_iter_timings);
 
         let combinestart = Instant::now();
-        let sig = arctic::combine_polys(&pubkey, t, &coalition, &polys, &msg, &commits, &sigshares)
+        let sig = arctic::combine_polys(&pubkey, t, &coalition, &polys, &msg, &r1_outputs, &sigshares)
             .unwrap();
         let combinedur = combinestart.elapsed().as_micros() as f64;
         combine_timings.push(combinedur);

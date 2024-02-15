@@ -7,7 +7,7 @@ use sha2::Sha256;
 
 pub use crate::lagrange::lagrange_polys;
 
-type PubKey = RistrettoPoint;
+pub type PubKey = RistrettoPoint;
 
 pub struct SecKey {
     t: u32,
@@ -26,7 +26,8 @@ impl SecKey {
     }
 }
 
-type Signature = (RistrettoPoint, Scalar);
+pub type R1Output = ([u8; 32], RistrettoPoint);
+pub type Signature = (RistrettoPoint, Scalar);
 
 // Generate Arctic keys using a trusted dealer.  The output is the group
 // public key, a vector of each individual player's public key (unused
@@ -79,38 +80,51 @@ fn hash3(combcomm: &RistrettoPoint, pk: &PubKey, msg: &[u8]) -> Scalar {
     Scalar::from_bytes_mod_order(hashval)
 }
 
-pub fn sign1(sk: &SecKey, coalition: &[u32], msg: &[u8]) -> RistrettoPoint {
+// The first round of the signature protocol.
+pub fn sign1(sk: &SecKey, coalition: &[u32], msg: &[u8]) -> R1Output {
     assert!(coalition.len() >= 2 * (sk.t as usize) - 1);
-    let w = hash2(&sk.pk, msg);
-    sk.shine_key.gen(&w).1
+    let y = hash2(&sk.pk, msg);
+    (y, sk.shine_key.gen(&y).1)
 }
 
+// The second round of the signature protocol.  Note: it is vital that
+// the ([u8;32], RistrettoPoint) received from all the parties' first
+// round were received over authenticated channels.  If an adversary can
+// forge honest parties' round one messages, Arctic is _not_ secure.
 pub fn sign2_polys(
     pk: &PubKey,
     sk: &SecKey,
     coalition: &[u32],
     lag_polys: &[ScalarPoly],
     msg: &[u8],
-    commitments: &[RistrettoPoint],
+    r1_outputs: &[R1Output],
 ) -> Option<Scalar> {
     // If the inputs are _malformed_, abort
 
     assert!(coalition.len() == lag_polys.len());
-    assert!(coalition.len() == commitments.len());
+    assert!(coalition.len() == r1_outputs.len());
     assert!(coalition.len() >= 2 * (sk.t as usize) - 1);
 
     // Find my own entry in the coalition; abort if it's not there
     let kindex = coalition.iter().position(|&k| k == sk.k).unwrap();
 
-    let w = hash2(pk, msg);
-    let (my_eval, my_commit) = sk.shine_key.gen(&w);
+    let y = hash2(pk, msg);
 
-    assert!(commitments[kindex] == my_commit);
+    // Make sure all the parties are submitting commitments for the same
+    // y (the same pk and msg).
+    if r1_outputs.iter().any(|(yk, _)| yk != &y) {
+        return None;
+    }
+
+    let (my_eval, my_commit) = sk.shine_key.gen(&y);
+    assert!(r1_outputs[kindex].1 == my_commit);
 
     // If the inputs are just corrupt values from malicious other
     // parties, return None but don't crash
 
-    let combcomm = shine::combinecomm_polys(sk.t, lag_polys, commitments)?;
+    let commitments : Vec<RistrettoPoint> =
+        r1_outputs.iter().map(|(_,commitment)| *commitment).collect();
+    let combcomm = shine::combinecomm_polys(sk.t, lag_polys, &commitments)?;
     let c = hash3(&combcomm, pk, msg);
 
     Some(my_eval + c * sk.sk)
@@ -121,10 +135,10 @@ pub fn sign2(
     sk: &SecKey,
     coalition: &[u32],
     msg: &[u8],
-    commitments: &[RistrettoPoint],
+    r1_outputs: &[R1Output],
 ) -> Option<Scalar> {
     let polys = lagrange_polys(coalition);
-    sign2_polys(pk, sk, coalition, &polys, msg, commitments)
+    sign2_polys(pk, sk, coalition, &polys, msg, r1_outputs)
 }
 
 pub fn combine_polys(
@@ -133,11 +147,11 @@ pub fn combine_polys(
     coalition: &[u32],
     lag_polys: &[ScalarPoly],
     msg: &[u8],
-    commitments: &[RistrettoPoint],
+    r1_outputs: &[R1Output],
     sigshares: &[Scalar],
 ) -> Option<Signature> {
     assert!(coalition.len() == lag_polys.len());
-    assert!(coalition.len() == commitments.len());
+    assert!(coalition.len() == r1_outputs.len());
     assert!(coalition.len() == sigshares.len());
     assert!(coalition.len() >= 2 * (t as usize) - 1);
 
@@ -145,7 +159,9 @@ pub fn combine_polys(
 
     // Check the answer
 
-    let combcomm = shine::agg_polys(t, lag_polys, commitments);
+    let commitments : Vec<RistrettoPoint> =
+        r1_outputs.iter().map(|(_,commitment)| *commitment).collect();
+    let combcomm = shine::agg_polys(t, lag_polys, &commitments);
     let c = hash3(&combcomm, pk, msg);
 
     if shine::commit(&z) == combcomm + c * pk {
@@ -159,11 +175,11 @@ pub fn combine(
     t: u32,
     coalition: &[u32],
     msg: &[u8],
-    commitments: &[RistrettoPoint],
+    r1_outputs: &[R1Output],
     sigshares: &[Scalar],
 ) -> Option<Signature> {
     let polys = lagrange_polys(coalition);
-    combine_polys(pk, t, coalition, &polys, msg, commitments, sigshares)
+    combine_polys(pk, t, coalition, &polys, msg, r1_outputs, sigshares)
 }
 
 pub fn verify(pk: &PubKey, msg: &[u8], sig: &Signature) -> bool {
@@ -182,17 +198,17 @@ pub fn test_arctic_good() {
 
     let msg = b"A message to be signed";
 
-    let commits: Vec<RistrettoPoint> = seckeys
+    let r1_outputs: Vec<R1Output> = seckeys
         .iter()
         .map(|key| sign1(key, &coalition, msg))
         .collect();
 
     let sigshares: Vec<Scalar> = seckeys
         .iter()
-        .map(|key| sign2(&pubkey, key, &coalition, msg, &commits).unwrap())
+        .map(|key| sign2(&pubkey, key, &coalition, msg, &r1_outputs).unwrap())
         .collect();
 
-    let sig = combine(&pubkey, t, &coalition, msg, &commits, &sigshares).unwrap();
+    let sig = combine(&pubkey, t, &coalition, msg, &r1_outputs, &sigshares).unwrap();
 
     assert!(verify(&pubkey, msg, &sig));
 }
@@ -209,18 +225,18 @@ pub fn test_arctic_bad1() {
 
     let msg = b"A message to be signed";
 
-    let mut commits: Vec<RistrettoPoint> = seckeys
+    let mut r1_outputs: Vec<R1Output> = seckeys
         .iter()
         .map(|key| sign1(key, &coalition, msg))
         .collect();
 
     // Modify player 1's commitment
-    let v = commits[1];
-    commits[0] += v;
+    let v = r1_outputs[1].1;
+    r1_outputs[0].1 += v;
 
     // Player 1 should abort because its own commit is no longer in the
     // list
-    sign2(&pubkey, &seckeys[0], &coalition, msg, &commits);
+    sign2(&pubkey, &seckeys[0], &coalition, msg, &r1_outputs);
 }
 
 #[test]
@@ -234,18 +250,18 @@ pub fn test_arctic_bad2() {
 
     let msg = b"A message to be signed";
 
-    let mut commits: Vec<RistrettoPoint> = seckeys
+    let mut r1_outputs: Vec<R1Output> = seckeys
         .iter()
         .map(|key| sign1(key, &coalition, msg))
         .collect();
 
     // Modify player 1's commitment
-    let v = commits[1];
-    commits[0] += v;
+    let v = r1_outputs[1].1;
+    r1_outputs[0].1 += v;
 
     // Player 2 should return None because the commitments are
     // inconsistent
-    assert_eq!(sign2(&pubkey, &seckeys[1], &coalition, msg, &commits), None);
+    assert_eq!(sign2(&pubkey, &seckeys[1], &coalition, msg, &r1_outputs), None);
 }
 
 #[test]
@@ -259,25 +275,17 @@ pub fn test_arctic_bad3() {
 
     let msg = b"A message to be signed";
 
-    let commits: Vec<RistrettoPoint> = seckeys
+    let mut r1_outputs: Vec<R1Output> = seckeys
         .iter()
         .map(|key| sign1(key, &coalition, msg))
         .collect();
 
-    let mut sigshares: Vec<Scalar> = seckeys
-        .iter()
-        .map(|key| sign2(&pubkey, key, &coalition, msg, &commits).unwrap())
-        .collect();
+    // Modify player 1's y value
+    r1_outputs[0].0[0] += 1;
 
-    // Modify player 0's signature share
-    sigshares[0] += Scalar::one();
-
-    // Combine should return None because the shares don't combine to a
-    // valid signature
-    assert_eq!(
-        combine(&pubkey, t, &coalition, msg, &commits, &sigshares),
-        None
-    );
+    // Player 2 should return None because the y values are
+    // inconsistent
+    assert_eq!(sign2(&pubkey, &seckeys[1], &coalition, msg, &r1_outputs), None);
 }
 
 #[test]
@@ -291,21 +299,77 @@ pub fn test_arctic_bad4() {
 
     let msg = b"A message to be signed";
 
-    let commits: Vec<RistrettoPoint> = seckeys
+    let r1_outputs: Vec<R1Output> = seckeys
+        .iter()
+        .map(|key| sign1(key, &coalition, msg))
+        .collect();
+
+    // Use a different message in round 2
+    let msg2 = b"A message to be signef";
+
+    // Player 2 should return None because the y values are
+    // inconsistent
+    assert_eq!(sign2(&pubkey, &seckeys[1], &coalition, msg2, &r1_outputs), None);
+}
+
+#[test]
+pub fn test_arctic_bad5() {
+    let n = 7u32;
+    let t = 4u32;
+
+    let (pubkey, _, seckeys) = keygen(n, t);
+
+    let coalition = (1..=n).collect::<Vec<u32>>();
+
+    let msg = b"A message to be signed";
+
+    let r1_outputs: Vec<R1Output> = seckeys
+        .iter()
+        .map(|key| sign1(key, &coalition, msg))
+        .collect();
+
+    let mut sigshares: Vec<Scalar> = seckeys
+        .iter()
+        .map(|key| sign2(&pubkey, key, &coalition, msg, &r1_outputs).unwrap())
+        .collect();
+
+    // Modify player 0's signature share
+    sigshares[0] += Scalar::one();
+
+    // Combine should return None because the shares don't combine to a
+    // valid signature
+    assert_eq!(
+        combine(&pubkey, t, &coalition, msg, &r1_outputs, &sigshares),
+        None
+    );
+}
+
+#[test]
+pub fn test_arctic_bad6() {
+    let n = 7u32;
+    let t = 4u32;
+
+    let (pubkey, _, seckeys) = keygen(n, t);
+
+    let coalition = (1..=n).collect::<Vec<u32>>();
+
+    let msg = b"A message to be signed";
+
+    let r1_outputs: Vec<R1Output> = seckeys
         .iter()
         .map(|key| sign1(key, &coalition, msg))
         .collect();
 
     let sigshares: Vec<Scalar> = seckeys
         .iter()
-        .map(|key| sign2(&pubkey, key, &coalition, msg, &commits).unwrap())
+        .map(|key| sign2(&pubkey, key, &coalition, msg, &r1_outputs).unwrap())
         .collect();
 
     // Modify the message
     let msg2 = b"A message to be signef";
 
     assert_eq!(
-        combine(&pubkey, t, &coalition, msg2, &commits, &sigshares),
+        combine(&pubkey, t, &coalition, msg2, &r1_outputs, &sigshares),
         None
     );
 }
