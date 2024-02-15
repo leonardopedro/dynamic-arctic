@@ -22,6 +22,8 @@ fn binom(m: u32, k: u32) -> u64 {
     numer / denom
 }
 
+// The hash function used to create the coefficients for the
+// pseudorandom secret sharing.
 fn hash1(phi: &[u8; 32], w: &[u8]) -> Scalar {
     let mut hash = Sha256::new();
     hash.update(phi);

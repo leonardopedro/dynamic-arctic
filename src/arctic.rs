@@ -63,6 +63,8 @@ pub fn keygen(n: u32, t: u32) -> (PubKey, Vec<PubKey>, Vec<SecKey>) {
     (group_pubkey, player_pubkeys, seckeys)
 }
 
+// The hash function used to generate the value y that's the input to
+// shine::gen.
 fn hash2(pk: &PubKey, msg: &[u8]) -> [u8; 32] {
     let mut hash = Sha256::new();
     hash.update(pk.compress().as_bytes());
@@ -70,6 +72,10 @@ fn hash2(pk: &PubKey, msg: &[u8]) -> [u8; 32] {
     hash.finalize().into()
 }
 
+// The hash function that's used to generate the challenge c for the
+// Schnorr signature.  This function has to match the one for the
+// Schnorr verification implementation you're interoperating with, and
+// will depend on what group you're operating over.
 fn hash3(combcomm: &RistrettoPoint, pk: &PubKey, msg: &[u8]) -> Scalar {
     let mut hash = Sha256::new();
     hash.update(combcomm.compress().as_bytes());
