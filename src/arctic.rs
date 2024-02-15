@@ -14,6 +14,7 @@ pub struct SecKey {
     k: u32,
     sk: Scalar,
     rk: shine::PreprocKey,
+    pk: PubKey,
 }
 
 impl SecKey {
@@ -42,6 +43,7 @@ pub fn keygen(n: u32, t: u32) -> (PubKey, Vec<SecKey>) {
             k,
             sk: shamirpoly.eval(&Scalar::from(k)),
             rk: shine::PreprocKey::preproc(&shinekeys[(k as usize) - 1]),
+            pk: pubkey,
         });
     }
 
@@ -65,9 +67,9 @@ fn hash3(combcomm: &RistrettoPoint, pk: &PubKey, msg: &[u8]) -> Scalar {
     Scalar::from_bytes_mod_order(hashval)
 }
 
-pub fn sign1(pk: &PubKey, sk: &SecKey, coalition: &[u32], msg: &[u8]) -> RistrettoPoint {
+pub fn sign1(sk: &SecKey, coalition: &[u32], msg: &[u8]) -> RistrettoPoint {
     assert!(coalition.len() >= 2 * (sk.t as usize) - 1);
-    let w = hash2(pk, msg);
+    let w = hash2(&sk.pk, msg);
     sk.rk.gen(&w).1
 }
 
@@ -170,7 +172,7 @@ pub fn test_arctic_good() {
 
     let commits: Vec<RistrettoPoint> = seckeys
         .iter()
-        .map(|key| sign1(&pubkey, key, &coalition, msg))
+        .map(|key| sign1(key, &coalition, msg))
         .collect();
 
     let sigshares: Vec<Scalar> = seckeys
@@ -197,7 +199,7 @@ pub fn test_arctic_bad1() {
 
     let mut commits: Vec<RistrettoPoint> = seckeys
         .iter()
-        .map(|key| sign1(&pubkey, key, &coalition, msg))
+        .map(|key| sign1(key, &coalition, msg))
         .collect();
 
     // Modify player 1's commitment
@@ -222,7 +224,7 @@ pub fn test_arctic_bad2() {
 
     let mut commits: Vec<RistrettoPoint> = seckeys
         .iter()
-        .map(|key| sign1(&pubkey, key, &coalition, msg))
+        .map(|key| sign1(key, &coalition, msg))
         .collect();
 
     // Modify player 1's commitment
@@ -247,7 +249,7 @@ pub fn test_arctic_bad3() {
 
     let commits: Vec<RistrettoPoint> = seckeys
         .iter()
-        .map(|key| sign1(&pubkey, key, &coalition, msg))
+        .map(|key| sign1(key, &coalition, msg))
         .collect();
 
     let mut sigshares: Vec<Scalar> = seckeys
@@ -279,7 +281,7 @@ pub fn test_arctic_bad4() {
 
     let commits: Vec<RistrettoPoint> = seckeys
         .iter()
-        .map(|key| sign1(&pubkey, key, &coalition, msg))
+        .map(|key| sign1(key, &coalition, msg))
         .collect();
 
     let sigshares: Vec<Scalar> = seckeys

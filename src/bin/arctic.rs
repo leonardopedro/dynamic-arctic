@@ -67,7 +67,7 @@ fn main() {
             .iter()
             .map(|key| {
                 let sign1start = Instant::now();
-                let commitment = arctic::sign1(&pubkey, key, &coalition, &msg);
+                let commitment = arctic::sign1(key, &coalition, &msg);
                 let sign1dur = sign1start.elapsed().as_micros() as f64;
                 (commitment, sign1dur)
             })
