@@ -135,7 +135,7 @@ impl PreprocKey {
         let d = self
             .secrets
             .iter()
-            .map(|&(phi, lagrange)| hash1(&phi, w) * lagrange)
+            .map(|(phi, lagrange)| hash1(phi, w) * lagrange)
             .sum();
         (d, &d * &dalek_constants::RISTRETTO_BASEPOINT_TABLE)
     }
