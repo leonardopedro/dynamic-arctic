@@ -46,14 +46,15 @@ pub struct Key {
 
 impl Key {
     pub fn keygen(n: u32, t: u32) -> Vec<Self> {
+        let delta = binom(n - 1, t - 1);
         let mut rng = rand::thread_rng();
-        let mut res: Vec<Self> = Vec::new();
+        let mut res: Vec<Self> = Vec::with_capacity(n as usize);
         for k in 1..=n {
             res.push(Self {
                 n,
                 t,
                 k,
-                secrets: Vec::new(),
+                secrets: Vec::with_capacity(delta as usize),
             });
         }
         let si = (1..=n).combinations((t - 1) as usize);
