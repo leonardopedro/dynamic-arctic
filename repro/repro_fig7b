@@ -1,0 +1,25 @@
+#!/bin/bash
+
+if [ "$#" == 0 ]; then
+    echo "The arguments to this script should be the list of the numbers of cores to use."
+    echo "For example, if you have 16 physical cores, you might run:"
+    echo
+    echo "$0 1 2 3 4 6 8 10 12 14 16"
+    exit 1
+fi
+
+# cd into the directory containing this script (from the bash faq 028)
+if [[ $BASH_SOURCE = */* ]]; then
+      cd -- "${BASH_SOURCE%/*}/" || exit
+fi
+
+run() {
+    nthr=$1
+    echo -n "# "; date
+    numactl -C0-$((nthr-1)) -m0 ../target/release/arctic 25 11 25 10
+    echo -n "# "; date
+}
+
+for nthreads in $*; do
+    run $nthreads | tee -a `hostname`.core${nthreads}.out
+done
