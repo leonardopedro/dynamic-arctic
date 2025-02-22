@@ -6,7 +6,7 @@ This repository contains the library code, benchmark harness, and reproduction s
 
 Chelsea Komlo and Ian Goldberg. "Arctic: Lightweight, Stateless, and Deterministic Two-Round Threshold Schnorr Signatures".
 
-This code implements both Arctic (the deterministic two-round threshold Schnorr signature scheme) and Shine (the underlying verifiable pseudorandom secret sharing scheme).
+This code implements both Arctic (the deterministic two-round threshold Schnorr signature scheme) and Shine (the underlying verifiable pseudorandom secret sharing scheme, called VPSS<sub>1</sub> in the paper).
 
 We used Rust 1.73.0 to build and benchmark this code.
 
