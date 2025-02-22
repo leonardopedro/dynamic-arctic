@@ -4,7 +4,7 @@ Code by Ian Goldberg, iang@uwaterloo.ca
 
 This repository contains the library code, benchmark harness, and reproduction scripts for our paper:
 
-Chelsea Komlo and Ian Goldberg. "Arctic: Lightweight, Stateless, and Deterministic Two-Round Threshold Schnorr Signatures".
+Chelsea Komlo and Ian Goldberg. "[Arctic: Lightweight, Stateless, and Deterministic Two-Round Threshold Schnorr Signatures](https://eprint.iacr.org/2024/466)", PKC 2025.
 
 This code implements both Arctic (the deterministic two-round threshold Schnorr signature scheme) and Shine (the underlying verifiable pseudorandom secret sharing scheme, called VPSS<sub>1</sub> in the paper).
 
