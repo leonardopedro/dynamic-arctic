@@ -1,8 +1,9 @@
+ALL IN THIS REPOSITORY IS WORK IN PROGRESS, MOSTLY AI GENERATED, PROBABLY NOTHING WORKS
 # Arctic: Lightweight, Stateless, and Deterministic Two-Round Threshold Schnorr Signatures
 
 Code by Ian Goldberg, iang@uwaterloo.ca
 
-This repository contains the library code, benchmark harness, and reproduction scripts for our paper:
+This repository contains the library code, benchmark harness, and reproduction scripts for the paper:
 
 Chelsea Komlo and Ian Goldberg. "[Arctic: Lightweight, Stateless, and Deterministic Two-Round Threshold Schnorr Signatures](https://eprint.iacr.org/2024/466)", PKC 2025.
 
@@ -86,3 +87,10 @@ To collect all the datapoints needed to reproduce Figure 7b in our paper, decide
 ```
 
 Note that only Shine.Gen is parallelized, which is used in Arctic's Sign1 and Sign2, and is in fact the dominant cost of signing when δ is large.  Key generation is not currently parallelized.
+
+## License
+
+Copyright 2024 Ian Goldberg
+
+This code is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+

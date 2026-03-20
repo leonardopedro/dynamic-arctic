@@ -1,4 +1,25 @@
+// Copyright 2024 Ian Goldberg
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the “Software”), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 use curve25519_dalek::scalar::Scalar;
+
 
 // Versions that just compute coefficients; these are used if you know
 // all of your input points are correct
@@ -8,8 +29,8 @@ use curve25519_dalek::scalar::Scalar;
 // in the coalition are allowed to include x itself, which will be
 // ignored.
 pub fn lagrange(coalition: &[u32], x: u32, target_x: u32) -> Scalar {
-    let mut numer = Scalar::one();
-    let mut denom = Scalar::one();
+    let mut numer = Scalar::ONE;
+    let mut denom = Scalar::ONE;
     let xscal = Scalar::from(x);
     let target_xscal = Scalar::from(target_x);
     for &c in coalition {
@@ -51,7 +72,7 @@ impl ScalarPoly {
 
     pub fn one() -> Self {
         Self {
-            coeffs: vec![Scalar::one()],
+            coeffs: vec![Scalar::ONE],
         }
     }
 
@@ -65,7 +86,7 @@ impl ScalarPoly {
     // Evaluate the polynomial at the given point (using Horner's
     // method)
     pub fn eval(&self, x: &Scalar) -> Scalar {
-        let mut res = Scalar::zero();
+        let mut res = Scalar::ZERO;
         for coeff in self.coeffs.iter().rev() {
             res *= x;
             res += coeff;
@@ -107,7 +128,7 @@ impl ScalarPoly {
     // Add another ScalarPoly to this one
     pub fn add(&mut self, other: &Self) {
         if other.coeffs.len() > self.coeffs.len() {
-            self.coeffs.resize(other.coeffs.len(), Scalar::zero());
+            self.coeffs.resize(other.coeffs.len(), Scalar::ZERO);
         }
         for i in 0..other.coeffs.len() {
             self.coeffs[i] += other.coeffs[i];
@@ -120,7 +141,7 @@ impl ScalarPoly {
 // include x itself, which will be ignored.
 pub fn lagrange_poly(coalition: &[u32], x: u32) -> ScalarPoly {
     let mut numer = ScalarPoly::one();
-    let mut denom = Scalar::one();
+    let mut denom = Scalar::ONE;
     let xscal = Scalar::from(x);
     for &c in coalition {
         if c != x {
@@ -148,7 +169,7 @@ pub fn test_rand_poly() {
     println!("randpoly = {:?}", rpoly);
 
     assert!(rpoly.coeffs.len() == 4);
-    assert!(rpoly.coeffs[0] != Scalar::zero());
+    assert!(rpoly.coeffs[0] != Scalar::ZERO);
     assert!(rpoly.coeffs[0] != rpoly.coeffs[1]);
 }
 
@@ -164,7 +185,7 @@ pub fn test_eval() {
     assert!(poly.coeffs[1] == Scalar::from(5u32));
     assert!(poly.coeffs[2] == Scalar::from(1u32));
 
-    let f0 = poly.eval(&Scalar::zero());
+    let f0 = poly.eval(&Scalar::ZERO);
     let f2 = poly.eval(&Scalar::from(2u32));
     let f7 = poly.eval(&Scalar::from(7u32));
 
@@ -189,9 +210,9 @@ fn sum_polys_is_x_to_the_i(polys: &[ScalarPoly], i: usize) {
         assert!(
             sum.coeffs[j]
                 == if i == j {
-                    Scalar::one()
+                    Scalar::ONE
                 } else {
-                    Scalar::zero()
+                    Scalar::ZERO
                 }
         );
     }
