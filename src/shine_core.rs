@@ -220,19 +220,28 @@ pub fn agg_polys(
     lag_polys: &[ScalarPoly],
     commitments: &[RistrettoPoint],
 ) -> RistrettoPoint {
+    agg_polys_at(t, lag_polys, commitments, &Scalar::ZERO)
+}
+
+// Combine already-verified commitments using precomputed Lagrange
+// polynomials, and evaluate the result at the given point target_x.
+// You must pass at least t commitments, and the same number of lag_polys.
+pub fn agg_polys_at(
+    _t: u32,
+    lag_polys: &[ScalarPoly],
+    commitments: &[RistrettoPoint],
+    target_x: &Scalar,
+) -> RistrettoPoint {
     let coalition_size = commitments.len();
-    assert!(t >= 1);
-    assert!(coalition_size >= 2 * (t as usize) - 1);
     assert!(coalition_size == lag_polys.len());
-    assert!(coalition_size == lag_polys[0].coeffs.len());
 
     // Use this to compute the multiscalar multiplications
     let multiscalar = VartimeRistrettoPrecomputation::new(std::iter::empty::<RistrettoPoint>());
 
-    // Compute B_0 (which is the combined commitment) and return it
+    // Compute B(target_x) (which is the combined commitment evaluated at target_x)
     multiscalar.vartime_mixed_multiscalar_mul(
         std::iter::empty::<Scalar>(),
-        (0..coalition_size).map(|j| lag_polys[j].coeffs[0]),
+        (0..coalition_size).map(|j| lag_polys[j].eval(target_x)),
         commitments,
     )
 }
@@ -294,6 +303,88 @@ pub fn test_preproc() {
 
     println!("preproc key for player 3: {:?}", ppkey3);
     println!("preproc key for player 7: {:?}", ppkey7);
+}
+
+// APPENDIX C ERROR CORRECTION: "Brute Force" Subset Checking
+// If the standard VPSS check fails, we iterate through all t-sized subsets of C.
+// For each subset S, we reconstruct the polynomial in the exponent.
+pub fn robust_vpss_verify(
+    t: u32,
+    coalition: &[u32],
+    commitments: &[RistrettoPoint],
+) -> Result<Vec<(u32, RistrettoPoint)>, &'static str> {
+    if commitments.len() < (2 * t as usize - 1) {
+        return Err("Not enough commitments for robust verification.");
+    }
+
+    if verify(t, coalition, commitments) {
+        return Ok(coalition.iter().zip(commitments.iter()).map(|(&id, &c)| (id, c)).collect());
+    }
+
+    let n = commitments.len();
+    let t_usize = t as usize;
+
+    // Try all t-sized subsets
+    for subset_indices in (0..n).combinations(t_usize) {
+        let subset_ids: Vec<u32> = subset_indices.iter().map(|&i| coalition[i]).collect();
+        let subset_points: Vec<RistrettoPoint> = subset_indices.iter().map(|&i| commitments[i]).collect();
+        let subset_polys = lagrange_polys(&subset_ids);
+
+        let mut valid_nodes = vec![];
+        for i in 0..n {
+            let id = coalition[i];
+            let id_scalar = Scalar::from(id);
+            let expected_commitment = agg_polys_at(t, &subset_polys, &subset_points, &id_scalar);
+            if expected_commitment == commitments[i] {
+                valid_nodes.push((id, commitments[i]));
+            }
+        }
+
+        if valid_nodes.len() >= (2 * t_usize - 1) {
+            return Ok(valid_nodes);
+        }
+    }
+
+    Err("Failed to find a valid honest supermajority polynomial.")
+}
+
+#[test]
+pub fn test_robust_vpss() {
+    let t = 3u32;
+    let n = 7u32;
+    let keys = Key::keygen(n, t);
+    let ppkeys: Vec<PreprocKey> = keys.iter().map(|x| PreprocKey::preproc(x)).collect();
+    let w = [0u8; 32];
+    let mut commitments: Vec<RistrettoPoint> = ppkeys.iter().map(|k| k.gen(&w).1).collect();
+    let coalition: Vec<u32> = (1..=n).collect();
+
+    // Verify it works normally
+    let res = robust_vpss_verify(t, &coalition, &commitments).unwrap();
+    assert_eq!(res.len(), n as usize);
+
+    // Corrupt one commitment (index 0)
+    let _original_c0 = commitments[0];
+    let v1 = commitments[1];
+    commitments[0] += v1;
+    
+    // Now verify(t, ...) should fail, but robust_vpss_verify should succeed and exclude index 0
+    assert!(!verify(t, &coalition, &commitments));
+    let res2 = robust_vpss_verify(t, &coalition, &commitments).unwrap();
+    assert_eq!(res2.len(), (n - 1) as usize);
+    assert!(!res2.iter().any(|(id, _)| *id == 1));
+
+    // Corrupt two commitments (indices 0 and 1)
+    // For t=3, 2t-1 = 5. if n=7, we can tolerate 2 bad nodes.
+    let v2 = commitments[2];
+    commitments[1] += v2;
+    let res3 = robust_vpss_verify(t, &coalition, &commitments).unwrap();
+    assert_eq!(res3.len(), (n - 2) as usize);
+    assert!(!res3.iter().any(|(id, _)| *id == 1 || *id == 2));
+    
+    // Corrupt three commitments. Should fail since we only have 4 honest nodes left (need 5).
+    let v3 = commitments[3];
+    commitments[2] += v3;
+    assert!(robust_vpss_verify(t, &coalition, &commitments).is_err());
 }
 
 #[test]

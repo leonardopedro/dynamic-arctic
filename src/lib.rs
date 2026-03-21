@@ -23,4 +23,3 @@ pub mod shine_core;
 mod lagrange;
 pub mod arctic;
 pub mod types;
-pub mod coordinator;

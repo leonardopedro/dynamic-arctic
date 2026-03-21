@@ -30,14 +30,14 @@ pub use crate::lagrange::lagrange_polys;
 pub type PubKey = RistrettoPoint;
 
 pub struct SecKey {
-    t: u32,
-    k: u32,
+    pub t: u32,
+    pub k: u32,
     // This player's signature key share
-    sk: Scalar,
+    pub sk: Scalar,
     // This player's Shine key share
-    shine_key: shine::PreprocKey,
+    pub shine_key: shine::PreprocKey,
     // The group public key
-    pk: PubKey,
+    pub pk: PubKey,
 }
 
 impl SecKey {
@@ -238,6 +238,72 @@ pub fn combine(
 ) -> Option<Signature> {
     let polys = lagrange_polys(coalition);
     combine_polys(pk, t, coalition, &polys, msg, r1_outputs, sigshares)
+}
+
+pub fn robust_combine(
+    pk: &PubKey,
+    t: u32,
+    coalition: &[u32],
+    msg: &[u8],
+    r1_outputs: &[R1Output],
+    sigshares: &[Scalar],
+    player_pubkeys: &[PubKey],
+) -> Option<Signature> {
+    let commitments: Vec<RistrettoPoint> = r1_outputs.iter().map(|(_, commitment)| *commitment).collect();
+    
+    // 1. Identify valid commitments using Robust VPSS
+    let valid_nodes = shine::robust_vpss_verify(t, coalition, &commitments).ok()?;
+    let valid_ids: std::collections::HashSet<u32> = valid_nodes.iter().map(|(id, _)| *id).collect();
+
+    // Filter coalition to only those with valid commitments
+    let mut filtered_indices = vec![];
+    for (i, &id) in coalition.iter().enumerate() {
+        if valid_ids.contains(&id) {
+            filtered_indices.push(i);
+        }
+    }
+    
+    let filtered_coalition: Vec<u32> = filtered_indices.iter().map(|&i| coalition[i]).collect();
+    let filtered_commitments: Vec<RistrettoPoint> = filtered_indices.iter().map(|&i| commitments[i]).collect();
+    
+    // 2. Compute the challenge c based on the valid supermajority
+    // Appendix C: $|C| \ge 2t-1$ for unique polynomial reconstruction.
+    let filtered_polys = lagrange_polys(&filtered_coalition);
+    let combcomm = shine::agg_polys(t, &filtered_polys, &filtered_commitments);
+    let c = hash3(&combcomm, pk, msg);
+
+    // 3. Verify individual signature shares (Identifiable Abort)
+    let mut honest_indices = vec![];
+    for (idx, &orig_idx) in filtered_indices.iter().enumerate() {
+        let node_id = coalition[orig_idx];
+        let z_i = sigshares[orig_idx];
+        let r_i = commitments[orig_idx];
+        let pk_i = player_pubkeys[(node_id - 1) as usize];
+        let l_i_0 = filtered_polys[idx].coeffs[0];
+
+        // verification: g^z_i == R_i + c * L_i(0) * PK_i
+        if shine::commit(&z_i) == r_i + (c * l_i_0) * pk_i {
+            honest_indices.push(idx);
+        } else {
+            println!("🚨 IDENTIFIABLE ABORT: Node {} sent a mathematically invalid share! Excluding.", node_id);
+        }
+    }
+
+    if honest_indices.len() < (t as usize) {
+        return None;
+    }
+
+    // 4. Combine using only honest shares
+    let honest_coalition: Vec<u32> = honest_indices.iter().map(|&i| filtered_coalition[i]).collect();
+    let honest_shares: Vec<Scalar> = honest_indices.iter().map(|&i| sigshares[filtered_indices[i]]).collect();
+    let honest_polys = lagrange_polys(&honest_coalition);
+    
+    let z = interpolate_polys_0(&honest_polys, &honest_shares);
+
+    if shine::commit(&z) == combcomm + c * pk {
+        return Some((combcomm, z));
+    }
+    None
 }
 
 pub fn verify(pk: &PubKey, msg: &[u8], sig: &Signature) -> bool {

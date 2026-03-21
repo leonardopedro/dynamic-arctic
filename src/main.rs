@@ -1,6 +1,5 @@
 mod types;
 mod arctic;
-mod coordinator;
 pub mod arctic_core;
 pub mod shine_core;
 mod lagrange;
@@ -12,39 +11,43 @@ use tokio::net::TcpListener;
 use bs58;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::types::{AggregateKey, DelegationRequest, DelegationCertificate};
-use crate::arctic::ArcticNode;
-use crate::coordinator::RoastCoordinator;
+use crate::types::{DelegationRequest, DelegationCertificate};
+use crate::arctic::{ArcticNode, derive_session_id, aggregate_signatures};
 
 struct AppState {
-    coordinator: RoastCoordinator,
+    nodes: Vec<ArcticNode>,
+    threshold: u32,
+    #[allow(dead_code)]
+    total_nodes: u32,
     master_pubkey_multibase: String,
     domain: String,
 }
 
 #[tokio::main]
 async fn main() {
-    // 1. Bootstrap Authority (Simulating DKG Output)
-    // We use a fixed seed for demonstration
-    let secret = ed25519_dalek::SigningKey::from_bytes(&[1u8; 32]);
-    let master_pubkey = ed25519_dalek::VerifyingKey::from(&secret);
+    // 1. Bootstrap Authority with Robust Parameters (Appendix C)
+    // t=3, n=7 allows native robustness against up to 2 malicious nodes
+    let t = 3;
+    let n = 7;
     
-    let mut codec_bytes = vec![0xed, 0x01];
-    codec_bytes.extend_from_slice(master_pubkey.as_bytes());
+    // Simulate DKG output
+    // In this project, we create a fresh key set for the 7 nodes.
+    let (group_pk, _, _) = arctic_core::keygen(n, t);
+    
+    // Map Ristretto group_pk to multibase for DID document representation
+    let pk_bytes = group_pk.compress().to_bytes();
+    let mut codec_bytes = vec![0xed, 0x01]; // ed25519-pub multicodec
+    codec_bytes.extend_from_slice(&pk_bytes);
     let multibase = format!("z{}", bs58::encode(codec_bytes).into_string());
 
-    let nodes: Vec<ArcticNode> = (1..=5)
-        .map(|i| ArcticNode::new(i, [i as u8; 32], master_pubkey.clone()))
+    let nodes: Vec<ArcticNode> = (1..=n)
+        .map(|i| ArcticNode::new(i, [i as u8; 32], t, n))
         .collect();
     
-    let agg_key = AggregateKey { 
-        master_public_key: master_pubkey, 
-        threshold: 3, 
-        total_nodes: 5 
-    };
-    
     let state = Arc::new(AppState {
-        coordinator: RoastCoordinator::new(agg_key, nodes),
+        nodes,
+        threshold: t,
+        total_nodes: n,
         master_pubkey_multibase: multibase,
         domain: "authority.yourdomain.com".to_string(),
     });
@@ -57,7 +60,7 @@ async fn main() {
 
     let addr = "0.0.0.0:3000";
     let listener = TcpListener::bind(addr).await.unwrap();
-    println!("Authority live on port 3000...");
+    println!("Stateless Arctic Authority (Native Robustness) live on port 3000...");
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -86,7 +89,7 @@ async fn handle_delegate(
 ) -> Json<Value> {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
     
-    // Create a 30-day certificate
+    // Create the Delegation Certificate
     let cert = DelegationCertificate {
         issuer_did: format!("did:web:{}", state.domain),
         delegatee_pk: payload.hot_key_pk_multibase,
@@ -95,9 +98,36 @@ async fn handle_delegate(
     };
 
     let cert_bytes = serde_json::to_vec(&cert).unwrap();
+    
+    // --- APPENDIX C: NATIVE ROBUSTNESS (NO COORDINATOR RETRY LOOP) ---
+    
+    // 1. ROUND 1: Deterministic broadcast to collect commitments
+    let session_id = derive_session_id(&cert_bytes);
+    let mut r1_payloads = vec![];
+    for node in &state.nodes {
+        r1_payloads.push(node.process_round_1(session_id));
+    }
+    
+    // 2. ROUND 2: Broadcast R1 set and collect shares
+    let coalition: Vec<u32> = r1_payloads.iter().map(|p| p.sender_node_id).collect();
+    let r1_commitments: Vec<(u32, [u8; 32])> = r1_payloads.iter()
+        .map(|p| (p.sender_node_id, p.data.r_point))
+        .collect();
+        
+    let mut r2_payloads = vec![];
+    for node in &state.nodes {
+        // In robust mode, nodes follow a linear path. We simulate broad receiving here.
+        if let Ok(share) = node.process_round_2(session_id, &coalition, &r1_commitments, &cert_bytes) {
+            r2_payloads.push(share);
+        }
+    }
+    
+    // 3. COMBINE: Use identifiable abort to isolate honest shares
+    // We use the common group key and player pubkeys stored in the first node for this demo state.
+    let group_pk = &state.nodes[0].core_key.pk;
+    let player_pks = &state.nodes[0].player_pubkeys;
 
-    // The ROAST Coordinator handles the threshold ceremony
-    match state.coordinator.sign_robustly(&cert_bytes).await {
+    match aggregate_signatures(&cert_bytes, session_id, &r1_payloads, &r2_payloads, group_pk, player_pks, state.threshold) {
         Ok(sig) => Json(json!({
             "status": "success",
             "certificate": cert,

@@ -93,4 +93,4 @@ This work is based on research by **Ian Goldberg** (iang@uwaterloo.ca) and **Che
 The repository is licensed under the **MIT License**.
 
 ---
-*Disclaimer: All in this repository is currently Work In Progress. AI-assisted implementation was used to adapt the research primitives into this operational framework.*
+*Disclaimer: This project implements Native Robustness as described in ePrint 2024/466 Appendix C. It is currently in prototype status.*
