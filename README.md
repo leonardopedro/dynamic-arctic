@@ -1,96 +1,96 @@
-ALL IN THIS REPOSITORY IS WORK IN PROGRESS, MOSTLY AI GENERATED, PROBABLY NOTHING WORKS
-# Arctic: Lightweight, Stateless, and Deterministic Two-Round Threshold Schnorr Signatures
+# 🧊 Arctic Authority: Distributed Collective Authority for AT Protocol
 
-Code by Ian Goldberg, iang@uwaterloo.ca
+> **Status**: [PROTOTYPE] This project adapts the research-grade **Arctic** threshold signature scheme for use as a high-security, distributed authority in the AT Protocol. It now includes **ROAST** for liveness and **Proactive Secret Sharing (PSS)** for dynamic share rotation.
 
-This repository contains the library code, benchmark harness, and reproduction scripts for the paper:
+---
 
-Chelsea Komlo and Ian Goldberg. "[Arctic: Lightweight, Stateless, and Deterministic Two-Round Threshold Schnorr Signatures](https://eprint.iacr.org/2024/466)", PKC 2025.
+## 🚀 Overview
 
-This code implements both Arctic (the deterministic two-round threshold Schnorr signature scheme) and Shine (the underlying verifiable pseudorandom secret sharing scheme, called VPSS<sub>1</sub> in the paper).
+Arctic Authority provides a **Lightweight, Stateless, and Deterministic** threshold signing service. It is designed to act as a "Cold/Warm" Collective Authority that manages `did:web` identities and issues delegation certificates to "Hot" operational keys.
 
-We used Rust 1.73.0 to build and benchmark this code.
+### Key Features
+- **Deterministic Signing**: Round-1 nonces are derived from the message and secret sharing seeds, eliminating the need for state synchronization between nodes.
+- **ROAST Liveness**: A robust coordinator that ensures signing success even if up to $(n-t)$ nodes are offline or malicious.
+- **Proactive Secret Sharing (PSS)**: Built-in support for "epoch-based" secret rotation, allowing nodes to randomize their shares without changing the master public key.
+- **AT Protocol Ready**: Serves standard DID documents and implements the delegation certificate ceremony.
 
-## Running the benchmarks
+---
 
-There are two branches in this repository: the `main` branch is the single-threaded version, and the `rayon` branch is the multi-threaded version.
+## 🛠️ Installation
 
-### Single-threaded benchmarks (Figure 7a in the paper)
-
-Build the code with:
-```bash
-  git checkout main
-  cargo build --release
-```
-
-Then you can run individual benchmarks with:
-
-  - <code>./target/release/arctic _n_ _t_ _Cs_ _nsigs_</code>
-
-Where:
-
-  - <code>_n_</code> is the total number of parties
-  - <code>_t_</code> is the corruption threshold (if the adversary controls this many parties, they can recover the secret key and all security is lost)
-  - <code>_Cs_</code> is the size of the signing coalition (the number of parties that participate to produce a signature).
-  - <code>_nsigs_</code> is the number of signatures to generate.
-
-It must be the case that <code>_n_</code> ≥ <code>_Cs_</code> ≥ 2<code>_t_</code>-1, and <code>_t_</code> ≥ 2.
-
-Sample command line:
-
-`./target/release/arctic 21 11 21 10`
-
-Sample output:
-
-`21 11 21 10 184756 43984.1 ± 49.2 45616.8 ± 47.2 134.8 ± 5.4`
-
-The output fields are:
- 
-  - `21 11 21 10`: the four command-line arguments as above
-  - `184756`: the value δ = (<code>_n_</code>-1 choose <code>_t_</code>-1), which is the number of elements in the Shine private key.
-  - `43984.1 ± 49.2`: the time in microseconds for each of the <code>_Cs_</code> parties to compute Arctic's Sign1 (signing round 1) operation.  The reported values are the mean and stddev over the <code>_Cs_</code> parties and the <code>_nsigs_</code> signatures.
-  - `45616.8 ± 47.2`: the time in microseconds for each of the <code>_Cs_</code> parties to compute Arctic's Sign2 (signing round 2) operation.  The reported values are the mean and stddev over the <code>_Cs_</code> parties and the <code>_nsigs_</code> signatures.
-  - `134.8 ± 5.4`: the time in microseconds for a single party to compute Arctic's Combine (combining the parties' outputs into the final signature) operation.  The reported values are the mean and stddev over the <code>_nsigs_</code> signatures.
-
-To collect all the datapoints needed to reproduce the Arctic data in Figure 7a in our paper:
+Ensure you have Rust (v1.75+) installed.
 
 ```bash
-   cd repro
-   ./repro-fig7a
+git clone <repository_url>
+cd dynamic-arctic
+cargo build --release
 ```
 
-This should take about 30–40 minutes, depending on your hardware.  The values plotted in the figure are the sums of the means of Sign1, Sign2, and Combine, divided by 1000 to convert from microseconds to milliseconds.  The stddevs plotted are the square roots of the sums of the squares of the stddevs of Sign1, Sign2, and Combine (and again converted to milliseconds), but they are mostly too small to see in the figure.
+---
 
-### Multi-threaded benchmarks (Figure 7b in the paper)
+## 📖 Tutorial: Running a Synthetic Authority
 
-Build the code with:
-```bash
-  git checkout rayon
-  cargo build --release
-```
-
-You will also need to have `numactl` installed (even if you aren't running on a NUMA machine).
-
-You will not get a significant performance boost from hyperthreading.  If you have <code>_P_</code> physical cores on your CPU, this code assumes that in `/proc/cpuinfo`, the first <code>_P_</code> listed processors are all the "A sides" of your <code>_P_</code> physical cores.  The code also assumes that these first <code>_P_</code> physical cores are all on NUMA node 0, if you have a NUMA machine.  (These assumptions are quite likely to be true.)
-
-Then you can run individual benchmarks with:
-
-  - <code>numactl -C _cores_ -m0 ./target/release/arctic _n_ _t_ _Cs_ _nsigs_</code>
-
-Where <code>_cores_</code> is a range of core numbers to use.  If you want to use, for example, 18 physical cores on your first (or only) CPU, you would use `numactl -C 0-17 -m0`.  The other arguments, and the output, are as in the single-threaded benchmarks above.
-
-To collect all the datapoints needed to reproduce Figure 7b in our paper, decide how many cores you want to use for each of the datapoints.  For example, if you have a four-core CPU, you might use `1 2 3 4`, while if  you have a 16-core CPU, you might use `1 2 3 4 6 8 10 12 14 16`.  Then, for example:
+### 1. Launch the Authority API
+For demonstration, you can boot the entire authority (simulating 5 nodes) on a single machine:
 
 ```bash
-   cd repro
-   ./repro-fig7b 1 2 3 4 6 8 10 12 14 16
+cargo run
+```
+*Output:* `Authority live on port 3000...`
+
+### 2. Retrieve the DID Document
+The authority serves its identity at the standard `.well-known` path:
+
+```bash
+curl http://localhost:3000/.well-known/did.json
 ```
 
-Note that only Shine.Gen is parallelized, which is used in Arctic's Sign1 and Sign2, and is in fact the dominant cost of signing when δ is large.  Key generation is not currently parallelized.
+### 3. Request a Delegation Certificate
+As a PDS or a user with a "Hot Key," you can request a 30-day delegation certificate. This initiates a **Threshold Signing Ceremony** across the internal nodes:
 
-## License
+```bash
+curl -X POST http://localhost:3000/api/v1/delegate \
+  -H "Content-Type: application/json" \
+  -d '{"hot_key_pk_multibase": "z6MkhaXgBZD..."}'
+```
 
-Copyright 2024 Ian Goldberg
+### 4. Performing a PSS Resharing (Manual)
+To rotate the secret shares for improved proactive security:
 
-This code is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+```bash
+# In the code, this is executed via:
+node.core_key.generate_reshare_packet(n);
+node.core_key.apply_reshare_packets(&incoming);
+```
+*(See `src/arctic_core.rs` tests for a full ritual simulation)*
 
+---
+
+## 📊 Benchmarks
+
+Reproduction scripts for the original PKC 2025 paper are preserved in the `repro/` directory.
+
+To run the modernized Arctic benchmarks:
+```bash
+# Usage: ./target/release/arctic_bench <total_n> <threshold_t> <coalition_size> <reps>
+./target/release/arctic_bench 21 11 21 10
+```
+
+---
+
+## 🏗️ Architecture
+
+- **`src/arctic_core.rs`**: The core Arctic signing primitives (Round 1 & 2).
+- **`src/shine_core.rs`**: The SHINE (VPSS) implementation for verifiable commitments.
+- **`src/coordinator.rs`**: The ROAST implementation for robust aggregation.
+- **`src/main.rs`**: The AT Protocol API entry point.
+
+---
+
+## 📜 License
+
+This work is based on research by **Ian Goldberg** (iang@uwaterloo.ca) and **Chelsea Komlo**. 
+The repository is licensed under the **MIT License**.
+
+---
+*Disclaimer: All in this repository is currently Work In Progress. AI-assisted implementation was used to adapt the research primitives into this operational framework.*
