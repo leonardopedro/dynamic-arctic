@@ -1,16 +1,18 @@
 # 🧊 Arctic Authority: Distributed Collective Authority for AT Protocol
 
-> **Status**: [PROTOTYPE] This project adapts the research-grade **Arctic** threshold signature scheme for use as a high-security, distributed authority in the AT Protocol. It now includes **ROAST** for liveness and **Proactive Secret Sharing (PSS)** for dynamic share rotation.
+> **Status**: [PROTOTYPE] This project implements the **Arctic** threshold signature scheme with **Native Robustness (Appendix C/C.1)**. By moving beyond the ROAST coordinator layer, we achieve robustness purely through mathematics, eliminating network retry-loops while preserving absolute statelessness.
 
 ---
 
 ## 🚀 Overview
 
-Arctic Authority provides a **Lightweight, Stateless, and Deterministic** threshold signing service. It is designed to act as a "Cold/Warm" Collective Authority that manages `did:web` identities and issues delegation certificates to "Hot" operational keys.
+Arctic Authority provides a **Lightweight, Stateless, and Robust** threshold signing service. It is designed to act as a "Cold/Warm" Collective Authority that manages `did:web` identities and issues delegation certificates to "Hot" operational keys for the AT Protocol.
 
 ### Key Features
-- **Deterministic Signing**: Round-1 nonces are derived from the message and secret sharing seeds, eliminating the need for state synchronization between nodes.
-- **ROAST Liveness**: A robust coordinator that ensures signing success even if up to $(n-t)$ nodes are offline or malicious.
+- **Deterministic Signing**: Round-1 nonces are derived from session-bound PRFs, eliminating the need for state synchronization between nodes.
+- **Native Robustness (Appendix C)**: Mathematical error correction in Round 1 (Robust VPSS) ensures successful signing even if up to $(n - (2t-1))$ nodes send bad data or are offline.
+- **Identifiable Aborts (Appendix C.1)**: Individual signature shares are verified against node public keys, allowing the authority to instantly isolate and exclude malicious contributors in a single pass.
+- **Stateless Replay Protection**: Secure Session IDs are derived from the certificate and a time-window, ensuring that replayed requests yield identical, harmless shares without needing a database.
 - **Proactive Secret Sharing (PSS)**: Built-in support for "epoch-based" secret rotation, allowing nodes to randomize their shares without changing the master public key.
 - **AT Protocol Ready**: Serves standard DID documents and implements the delegation certificate ceremony.
 
@@ -31,12 +33,12 @@ cargo build --release
 ## 📖 Tutorial: Running a Synthetic Authority
 
 ### 1. Launch the Authority API
-For demonstration, you can boot the entire authority (simulating 5 nodes) on a single machine:
+For demonstration, you can boot the entire authority (running a 7-node committee with threshold 3) on a single machine:
 
 ```bash
 cargo run
 ```
-*Output:* `Authority live on port 3000...`
+*Output:* `Stateless Arctic Authority (Native Robustness) live on port 3000...`
 
 ### 2. Retrieve the DID Document
 The authority serves its identity at the standard `.well-known` path:
@@ -46,7 +48,7 @@ curl http://localhost:3000/.well-known/did.json
 ```
 
 ### 3. Request a Delegation Certificate
-As a PDS or a user with a "Hot Key," you can request a 30-day delegation certificate. This initiates a **Threshold Signing Ceremony** across the internal nodes:
+As a PDS or a user with a "Hot Key," you can request a 30-day delegation certificate. This initiates a **Robust Threshold Ceremony** ($n=7, t=3$):
 
 ```bash
 curl -X POST http://localhost:3000/api/v1/delegate \
@@ -57,8 +59,8 @@ curl -X POST http://localhost:3000/api/v1/delegate \
 ### 4. Performing a PSS Resharing (Manual)
 To rotate the secret shares for improved proactive security:
 
-```bash
-# In the code, this is executed via:
+```rust
+// Individual nodes generate and apply reshare packets:
 node.core_key.generate_reshare_packet(n);
 node.core_key.apply_reshare_packets(&incoming);
 ```
@@ -66,24 +68,12 @@ node.core_key.apply_reshare_packets(&incoming);
 
 ---
 
-## 📊 Benchmarks
-
-Reproduction scripts for the original PKC 2025 paper are preserved in the `repro/` directory.
-
-To run the modernized Arctic benchmarks:
-```bash
-# Usage: ./target/release/arctic_bench <total_n> <threshold_t> <coalition_size> <reps>
-./target/release/arctic_bench 21 11 21 10
-```
-
----
-
 ## 🏗️ Architecture
 
-- **`src/arctic_core.rs`**: The core Arctic signing primitives (Round 1 & 2).
-- **`src/shine_core.rs`**: The SHINE (VPSS) implementation for verifiable commitments.
-- **`src/coordinator.rs`**: The ROAST implementation for robust aggregation.
-- **`src/main.rs`**: The AT Protocol API entry point.
+- **`src/arctic_core.rs`**: The core Arctic signing primitives, now featuring **Robust Combine** and Identifiable Abort logic.
+- **`src/shine_core.rs`**: The SHINE (VPSS) implementation with **Robust VPSS verification** (error-correcting subset checking).
+- **`src/arctic.rs`**: The high-level node implementation, handling deterministic Session IDs and Secure Payloads.
+- **`src/main.rs`**: The AT Protocol API entry point and bootstrap logic.
 
 ---
 
