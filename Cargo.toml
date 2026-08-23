@@ -2,21 +2,34 @@
 name = "arctic"
 version = "0.1.0"
 authors = ["Ian Goldberg <iang@uwaterloo.ca>"]
-edition = "2021"
 license = "MIT"
+edition = "2021"
+
+[features]
+default = ["server"]
+# The AT-Protocol authority HTTP server (main.rs). Off by default so the
+# library can be reused as a cheap path dependency (threshold signatures only).
+server = ["dep:axum", "dep:tokio", "dep:serde_json", "dep:bs58", "dep:hex", "dep:subtle"]
 
 [dependencies]
-tokio = { version = "1.50", features = ["full"] }
-axum = "0.8"
+# ── library deps (threshold Schnorr + Shine VPSS) ──
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 serde_bytes = "0.11"
 ed25519-dalek = { version = "2.2", features = ["rand_core", "serde"] }
 curve25519-dalek = { version = "4.1", features = ["rand_core"] }
 sha2 = { version = "0.10", features = ["oid"] }
-subtle = "2.6"
-bs58 = "0.5"
-hex = "0.4"
 itertools = "0.12"
 rand = "0.8"
 
+# ── server-only deps (the AT-Protocol authority in src/main.rs) ──
+axum = { version = "0.8", optional = true }
+tokio = { version = "1.50", features = ["full"], optional = true }
+serde_json = { version = "1.0", optional = true }
+bs58 = { version = "0.5", optional = true }
+hex = { version = "0.4", optional = true }
+subtle = { version = "2.6", optional = true }
+
+[[bin]]
+name = "arctic"
+path = "src/main.rs"
+required-features = ["server"]

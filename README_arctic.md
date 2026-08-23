@@ -1,5 +1,11 @@
-ALL IN THIS REPOSITORY IS WORK IN PROGRESS, MOSTLY AI GENERATED, PROBABLY NOTHING WORKS
 # Arctic: Lightweight, Stateless, and Deterministic Two-Round Threshold Schnorr Signatures
+
+> Status: the Arctic/Shine library (`arctic_core`, `shine_core`) is functional —
+> 32 unit tests pass (`cargo test`). The AT-Protocol authority server in
+> `src/main.rs` is a prototype; build it with `cargo build --features server`
+> (the default). The library itself has no server dependencies and is reused as
+> a path dependency by `unfer/unfer_consensus` for the certificate ledger's
+> threshold mint authority (`MintAuthority::Threshold`, see `PROJECT_PLAN.md`).
 
 Code by Ian Goldberg, iang@uwaterloo.ca
 

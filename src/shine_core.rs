@@ -28,7 +28,6 @@ use curve25519_dalek::traits::Identity;
 use curve25519_dalek::traits::VartimePrecomputedMultiscalarMul;
 use itertools::Itertools;
 use rand::RngCore;
-use sha2::digest::FixedOutput;
 use sha2::Digest;
 use sha2::Sha256;
 

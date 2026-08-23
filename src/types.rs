@@ -25,14 +25,22 @@ pub struct Round2Share {
     pub z_share: [u8; 32], // The scalar response
 }
 
+/// A single party's partial signature share, as sent to the combiner.
+/// Constructed by the collector from Round-2 shares; part of the wire API
+/// (external callers build these — nothing in this crate constructs them).
 #[derive(Clone, Serialize, Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct PartialSignature {
     pub node_id: u32,
     pub r_share: [u8; 32],
     pub z_share: [u8; 32],
 }
 
+/// The group's aggregate verification key (threshold, total, master pk).
+/// Produced at keygen; part of the wire API handed to verifiers (external
+/// consumers construct it from keygen output).
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct AggregateKey {
     pub master_public_key: VerifyingKey,
     pub threshold: usize,

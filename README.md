@@ -73,7 +73,25 @@ node.core_key.apply_reshare_packets(&incoming);
 - **`src/arctic_core.rs`**: The core Arctic signing primitives, now featuring **Robust Combine** and Identifiable Abort logic.
 - **`src/shine_core.rs`**: The SHINE (VPSS) implementation with **Robust VPSS verification** (error-correcting subset checking).
 - **`src/arctic.rs`**: The high-level node implementation, handling deterministic Session IDs and Secure Payloads.
-- **`src/main.rs`**: The AT Protocol API entry point and bootstrap logic.
+- **`src/main.rs`**: The AT Protocol API entry point and bootstrap logic (gated behind the `server` feature).
+
+---
+
+## 🔗 Reuse in the unfer project
+
+The library (`arctic_core`/`shine_core`) is reused as a **path dependency** by
+`unfer/unfer_consensus` with `default-features = false` (no server deps):
+
+- `unfer_consensus::signing::verify_arctic_threshold` verifies a 64-byte Arctic
+  aggregate signature `(RistrettoPoint, Scalar)` against a group public key
+  over a transaction's canonical bytes.
+- `unfer_consensus::certs::MintAuthority::Threshold { threshold, total, pubkey }`
+  makes the certificate ledger's mint authority a t-of-n threshold authority:
+  `ConsensusNode::submit` and log replay route mint ops through
+  `CertificateLedger::verify_threshold_mint` instead of the single-key Ed25519
+  check. The 64-byte signature fits the existing `op.signature` field exactly.
+
+See `unfer/PROJECT_PLAN.md` for the five-repo integration map.
 
 ---
 
@@ -83,4 +101,4 @@ This work is based on research by **Ian Goldberg** (iang@uwaterloo.ca) and **Che
 The repository is licensed under the **MIT License**.
 
 ---
-*Disclaimer: This project implements Native Robustness as described in ePrint 2024/466 Appendix C. It is currently in prototype status.*
+*Disclaimer: This project implements Native Robustness as described in ePrint 2024/466 Appendix C. The server is prototype status; the library is exercised by 32 passing unit tests and the unfer threshold-mint integration tests.*
