@@ -84,7 +84,7 @@ pub fn derive_session_id(message: &[u8]) -> [u8; 32] {
     // Bind to a 1-hour window for stateless replay protection as per Appendix C.1
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
     let hour_window = now / 3600;
-    hasher.update(&hour_window.to_be_bytes());
+    hasher.update(hour_window.to_be_bytes());
     
     let result = hasher.finalize();
     let mut session_id = [0u8; 32];

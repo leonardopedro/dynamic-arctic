@@ -272,17 +272,23 @@ pub fn robust_combine(
     let combcomm = shine::agg_polys(t, &filtered_polys, &filtered_commitments);
     let c = hash3(&combcomm, pk, msg);
 
-    // 3. Verify individual signature shares (Identifiable Abort)
+    // 3. Verify individual signature shares (Identifiable Abort).
+    //
+    // Arctic convention (a): sign shares are z_i = my_eval_i + c·sk_i (see
+    // `sign2`), so the per-share check is g^z_i == R_i + c·PK_i — WITHOUT the
+    // Lagrange factor L_i(0) (L_i(0) only enters at interpolation: the
+    // aggregate z = Σ L_i(0)·z_i, checked in step 4). Multiplying c by L_i(0)
+    // here would reject every honest share (regression caught by
+    // `test_robust_combine_identifiable_abort_single_malicious`).
     let mut honest_indices = vec![];
     for (idx, &orig_idx) in filtered_indices.iter().enumerate() {
         let node_id = coalition[orig_idx];
         let z_i = sigshares[orig_idx];
         let r_i = commitments[orig_idx];
         let pk_i = player_pubkeys[(node_id - 1) as usize];
-        let l_i_0 = filtered_polys[idx].coeffs[0];
 
-        // verification: g^z_i == R_i + c * L_i(0) * PK_i
-        if shine::commit(&z_i) == r_i + (c * l_i_0) * pk_i {
+        // verification: g^z_i == R_i + c * PK_i
+        if shine::commit(&z_i) == r_i + c * pk_i {
             honest_indices.push(idx);
         } else {
             println!("🚨 IDENTIFIABLE ABORT: Node {} sent a mathematically invalid share! Excluding.", node_id);
@@ -505,6 +511,138 @@ pub fn test_arctic_bad6() {
         combine(&pubkey, t, &coalition, msg2, &r1_outputs, &sigshares),
         None
     );
+}
+
+/// Serialize an Arctic aggregate signature to its 64-byte wire form:
+/// `(compressed RistrettoPoint, Scalar)` — the exact layout that
+/// `unfer_consensus::signing::verify_arctic_threshold` consumes (and the
+/// size of every `ConsensusTransaction` op's `signature` field).
+pub fn signature_to_bytes(sig: &Signature) -> [u8; 64] {
+    let mut out = [0u8; 64];
+    out[..32].copy_from_slice(sig.0.compress().as_bytes());
+    out[32..].copy_from_slice(&sig.1.to_bytes());
+    out
+}
+
+#[test]
+pub fn test_robust_combine_identifiable_abort_single_malicious() {
+    // Appendix C.1 end-to-end: one malicious node sends a mathematically
+    // invalid signature share (but a valid round-1 commitment, so Robust VPSS
+    // keeps it in the coalition). `robust_combine` must *identify* the bad
+    // share, exclude exactly that node, and still produce a valid signature
+    // from the honest majority.
+    let n = 7u32;
+    let t = 4u32;
+
+    let (pubkey, player_pubkeys, seckeys) = keygen(n, t);
+    let coalition = (1..=n).collect::<Vec<u32>>();
+    let msg = b"A message to be signed";
+
+    let r1_outputs: Vec<R1Output> = seckeys
+        .iter()
+        .map(|key| sign1(key, &coalition, msg))
+        .collect();
+    let mut sigshares: Vec<Scalar> = seckeys
+        .iter()
+        .map(|key| sign2(&pubkey, key, &coalition, msg, &r1_outputs).unwrap())
+        .collect();
+
+    // Node 0 sends a corrupt signature share (commitment stays valid).
+    sigshares[0] += Scalar::ONE;
+
+    // The plain combine must reject the corrupted aggregate…
+    assert_eq!(
+        combine(&pubkey, t, &coalition, msg, &r1_outputs, &sigshares),
+        None
+    );
+    // …but the robust combine isolates the bad node and still signs.
+    let sig = robust_combine(
+        &pubkey,
+        t,
+        &coalition,
+        msg,
+        &r1_outputs,
+        &sigshares,
+        &player_pubkeys,
+    )
+    .expect("robust combine must succeed with one malicious share");
+    assert!(verify(&pubkey, msg, &sig));
+}
+
+#[test]
+pub fn test_robust_combine_too_many_malicious_returns_none() {
+    // When the corrupted shares outnumber the honest remainder (fewer than t
+    // honest shares survive), robust combine must refuse rather than emit a
+    // bogus signature.
+    let n = 7u32;
+    let t = 4u32;
+
+    let (pubkey, player_pubkeys, seckeys) = keygen(n, t);
+    let coalition = (1..=n).collect::<Vec<u32>>();
+    let msg = b"A message to be signed";
+
+    let r1_outputs: Vec<R1Output> = seckeys
+        .iter()
+        .map(|key| sign1(key, &coalition, msg))
+        .collect();
+    let mut sigshares: Vec<Scalar> = seckeys
+        .iter()
+        .map(|key| sign2(&pubkey, key, &coalition, msg, &r1_outputs).unwrap())
+        .collect();
+
+    // Corrupt 4 of 7 shares: only 3 honest shares remain < t = 4.
+    for i in 0..4 {
+        sigshares[i] += Scalar::ONE;
+    }
+    assert_eq!(
+        robust_combine(
+            &pubkey,
+            t,
+            &coalition,
+            msg,
+            &r1_outputs,
+            &sigshares,
+            &player_pubkeys,
+        ),
+        None
+    );
+}
+
+#[test]
+pub fn test_arctic_signature_64_byte_roundtrip() {
+    // The aggregate signature must round-trip through the 64-byte wire form
+    // (the `signature` field layout) and verify after deserialization.
+    let n = 7u32;
+    let t = 4u32;
+    let (pubkey, _, seckeys) = keygen(n, t);
+    let coalition = (1..=n).collect::<Vec<u32>>();
+    let msg = b"A message to be signed";
+
+    let r1_outputs: Vec<R1Output> = seckeys
+        .iter()
+        .map(|key| sign1(key, &coalition, msg))
+        .collect();
+    let sigshares: Vec<Scalar> = seckeys
+        .iter()
+        .map(|key| sign2(&pubkey, key, &coalition, msg, &r1_outputs).unwrap())
+        .collect();
+    let sig = combine(&pubkey, t, &coalition, msg, &r1_outputs, &sigshares).unwrap();
+
+    let bytes = signature_to_bytes(&sig);
+    assert_eq!(bytes.len(), 64);
+
+    // Deserialize exactly the way verify_arctic_threshold does.
+    let r_point = curve25519_dalek::ristretto::CompressedRistretto::from_slice(&bytes[..32])
+        .expect("R must deserialize")
+        .decompress()
+        .expect("R must decompress");
+    let z = Scalar::from_canonical_bytes(bytes[32..].try_into().unwrap())
+        .into_option()
+        .expect("z must be canonical");
+    let roundtripped: Signature = (r_point, z);
+    assert_eq!(roundtripped.0, sig.0);
+    assert_eq!(roundtripped.1, sig.1);
+    assert!(verify(&pubkey, msg, &roundtripped));
 }
 
 #[test]

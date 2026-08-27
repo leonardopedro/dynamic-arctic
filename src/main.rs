@@ -8,7 +8,6 @@ use axum::{routing::{get, post}, Router, Json, extract::State};
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use bs58;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::types::{DelegationRequest, DelegationCertificate};
