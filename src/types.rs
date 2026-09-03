@@ -5,11 +5,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SecurePayload<T> {
     #[serde(with = "serde_bytes")]
-    pub session_id: [u8; 32],      // Deterministically derived from the AT Protocol request
+    pub session_id: [u8; 32], // Deterministically derived from the AT Protocol request
     pub sender_node_id: u32,
-    pub data: T,                   // The Round 1 Commitment or Round 2 Share
+    pub data: T, // The Round 1 Commitment or Round 2 Share
     #[serde(with = "serde_bytes")]
-    pub signature: [u8; 64],       // The sender's mTLS/Ed25519 signature of this payload
+    pub signature: [u8; 64], // The sender's mTLS/Ed25519 signature of this payload
 }
 
 // Data structures for Round 1 and Round 2

@@ -42,7 +42,13 @@ pub struct SecKey {
 
 impl SecKey {
     pub fn new(t: u32, k: u32, sk: Scalar, shine_key: shine::PreprocKey, pk: PubKey) -> Self {
-        Self { t, k, sk, shine_key, pk }
+        Self {
+            t,
+            k,
+            sk,
+            shine_key,
+            pk,
+        }
     }
 
     pub fn delta(&self) -> usize {
@@ -59,7 +65,7 @@ impl SecKey {
             coeffs.push(Scalar::random(&mut rng));
         }
         let poly = ScalarPoly { coeffs };
-        
+
         (1..=n).map(|i| poly.eval(&Scalar::from(i))).collect()
     }
 
@@ -249,8 +255,11 @@ pub fn robust_combine(
     sigshares: &[Scalar],
     player_pubkeys: &[PubKey],
 ) -> Option<Signature> {
-    let commitments: Vec<RistrettoPoint> = r1_outputs.iter().map(|(_, commitment)| *commitment).collect();
-    
+    let commitments: Vec<RistrettoPoint> = r1_outputs
+        .iter()
+        .map(|(_, commitment)| *commitment)
+        .collect();
+
     // 1. Identify valid commitments using Robust VPSS
     let valid_nodes = shine::robust_vpss_verify(t, coalition, &commitments).ok()?;
     let valid_ids: std::collections::HashSet<u32> = valid_nodes.iter().map(|(id, _)| *id).collect();
@@ -262,10 +271,11 @@ pub fn robust_combine(
             filtered_indices.push(i);
         }
     }
-    
+
     let filtered_coalition: Vec<u32> = filtered_indices.iter().map(|&i| coalition[i]).collect();
-    let filtered_commitments: Vec<RistrettoPoint> = filtered_indices.iter().map(|&i| commitments[i]).collect();
-    
+    let filtered_commitments: Vec<RistrettoPoint> =
+        filtered_indices.iter().map(|&i| commitments[i]).collect();
+
     // 2. Compute the challenge c based on the valid supermajority
     // Appendix C: $|C| \ge 2t-1$ for unique polynomial reconstruction.
     let filtered_polys = lagrange_polys(&filtered_coalition);
@@ -291,7 +301,10 @@ pub fn robust_combine(
         if shine::commit(&z_i) == r_i + c * pk_i {
             honest_indices.push(idx);
         } else {
-            println!("🚨 IDENTIFIABLE ABORT: Node {} sent a mathematically invalid share! Excluding.", node_id);
+            println!(
+                "🚨 IDENTIFIABLE ABORT: Node {} sent a mathematically invalid share! Excluding.",
+                node_id
+            );
         }
     }
 
@@ -300,10 +313,16 @@ pub fn robust_combine(
     }
 
     // 4. Combine using only honest shares
-    let honest_coalition: Vec<u32> = honest_indices.iter().map(|&i| filtered_coalition[i]).collect();
-    let honest_shares: Vec<Scalar> = honest_indices.iter().map(|&i| sigshares[filtered_indices[i]]).collect();
+    let honest_coalition: Vec<u32> = honest_indices
+        .iter()
+        .map(|&i| filtered_coalition[i])
+        .collect();
+    let honest_shares: Vec<Scalar> = honest_indices
+        .iter()
+        .map(|&i| sigshares[filtered_indices[i]])
+        .collect();
     let honest_polys = lagrange_polys(&honest_coalition);
-    
+
     let z = interpolate_polys_0(&honest_polys, &honest_shares);
 
     if shine::commit(&z) == combcomm + c * pk {
@@ -591,8 +610,8 @@ pub fn test_robust_combine_too_many_malicious_returns_none() {
         .collect();
 
     // Corrupt 4 of 7 shares: only 3 honest shares remain < t = 4.
-    for i in 0..4 {
-        sigshares[i] += Scalar::ONE;
+    for s in sigshares.iter_mut().take(4) {
+        *s += Scalar::ONE;
     }
     assert_eq!(
         robust_combine(
@@ -654,7 +673,10 @@ pub fn test_pss_resharing() {
     let msg = b"Test resharing";
 
     // 1. Verify we can sign BEFORE resharing
-    let r1_old: Vec<R1Output> = seckeys[0..5].iter().map(|sk| sign1(sk, &coalition, msg)).collect();
+    let r1_old: Vec<R1Output> = seckeys[0..5]
+        .iter()
+        .map(|sk| sign1(sk, &coalition, msg))
+        .collect();
     let sigshares_old: Vec<Scalar> = seckeys[0..5]
         .iter()
         .map(|sk| sign2(&pubkey, sk, &coalition, msg, &r1_old).unwrap())
@@ -665,21 +687,24 @@ pub fn test_pss_resharing() {
     // 2. Perform Resharing Ceremony
     // Each node generates its reshare packets.
     let mut shares_matrix: Vec<Vec<Scalar>> = Vec::new();
-    for i in 0..n as usize {
-        shares_matrix.push(seckeys[i].generate_reshare_packet(n));
+    for sk in &seckeys {
+        shares_matrix.push(sk.generate_reshare_packet(n));
     }
 
     // Nodes receive shares from everyone.
     for i in 0..n as usize {
         let mut my_received: Vec<Scalar> = Vec::new();
-        for j in 0..n as usize {
-            my_received.push(shares_matrix[j][i]);
+        for row in &shares_matrix {
+            my_received.push(row[i]);
         }
         seckeys[i].apply_reshare_packets(&my_received);
     }
 
     // 3. Signature after resharing (Same coalition, same message)
-    let r1_outputs: Vec<R1Output> = seckeys[0..5].iter().map(|sk| sign1(sk, &coalition, msg)).collect();
+    let r1_outputs: Vec<R1Output> = seckeys[0..5]
+        .iter()
+        .map(|sk| sign1(sk, &coalition, msg))
+        .collect();
     let sigshares_new: Vec<Scalar> = seckeys[0..5]
         .iter()
         .map(|sk| sign2(&pubkey, sk, &coalition, msg, &r1_outputs).unwrap())
