@@ -17,14 +17,14 @@ jobs:
     name: fmt + clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # actions/checkout@v4
       # First cargo invocation auto-installs the rust-toolchain.toml channel
       # and makes it the active toolchain for this directory.
       - name: Activate pinned toolchain (rust-toolchain.toml)
         run: cargo --version
       - name: Add lint components
         run: rustup component add rustfmt clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c  # Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
       # --all-features also lints the 'server' authority binary (axum/tokio).
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
@@ -33,10 +33,10 @@ jobs:
     name: test (server on + library-only)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # actions/checkout@v4
       - name: Activate pinned toolchain (rust-toolchain.toml)
         run: cargo --version
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c  # Swatinem/rust-cache@v2
       # Default features include the 'server' binary; threshold-signature tests
       # live in the lib (lagrange, arctic_core, shine_core).
       - name: cargo test (all features)
