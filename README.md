@@ -20,7 +20,10 @@ Arctic Authority provides a **Lightweight, Stateless, and Robust** threshold sig
 
 ## 🛠️ Installation
 
-Ensure you have Rust (v1.75+) installed.
+Ensure you have Rust installed — the repo pins **1.97.1** via
+`rust-toolchain.toml` (rustup installs it automatically; CI runs the same
+compiler, single toolchain across the dynamic-arctic/unfer/australVM/
+velysterm repos).
 
 ```bash
 git clone <repository_url>
