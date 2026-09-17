@@ -18,8 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod arctic_core;
-pub mod shine_core;
-mod lagrange;
 pub mod arctic;
+pub mod arctic_core;
+mod lagrange;
+pub mod shine_core;
 pub mod types;

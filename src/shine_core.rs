@@ -23,12 +23,11 @@ use curve25519_dalek::constants as dalek_constants;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::ristretto::VartimeRistrettoPrecomputation;
 use curve25519_dalek::scalar::Scalar;
-   
+
 use curve25519_dalek::traits::Identity;
 use curve25519_dalek::traits::VartimePrecomputedMultiscalarMul;
 use itertools::Itertools;
 use rand::RngCore;
-use sha2::digest::FixedOutput;
 use sha2::Digest;
 use sha2::Sha256;
 
@@ -318,7 +317,11 @@ pub fn robust_vpss_verify(
     }
 
     if verify(t, coalition, commitments) {
-        return Ok(coalition.iter().zip(commitments.iter()).map(|(&id, &c)| (id, c)).collect());
+        return Ok(coalition
+            .iter()
+            .zip(commitments.iter())
+            .map(|(&id, &c)| (id, c))
+            .collect());
     }
 
     let n = commitments.len();
@@ -327,7 +330,8 @@ pub fn robust_vpss_verify(
     // Try all t-sized subsets
     for subset_indices in (0..n).combinations(t_usize) {
         let subset_ids: Vec<u32> = subset_indices.iter().map(|&i| coalition[i]).collect();
-        let subset_points: Vec<RistrettoPoint> = subset_indices.iter().map(|&i| commitments[i]).collect();
+        let subset_points: Vec<RistrettoPoint> =
+            subset_indices.iter().map(|&i| commitments[i]).collect();
         let subset_polys = lagrange_polys(&subset_ids);
 
         let mut valid_nodes = vec![];
@@ -353,7 +357,7 @@ pub fn test_robust_vpss() {
     let t = 3u32;
     let n = 7u32;
     let keys = Key::keygen(n, t);
-    let ppkeys: Vec<PreprocKey> = keys.iter().map(|x| PreprocKey::preproc(x)).collect();
+    let ppkeys: Vec<PreprocKey> = keys.iter().map(PreprocKey::preproc).collect();
     let w = [0u8; 32];
     let mut commitments: Vec<RistrettoPoint> = ppkeys.iter().map(|k| k.gen(&w).1).collect();
     let coalition: Vec<u32> = (1..=n).collect();
@@ -366,7 +370,7 @@ pub fn test_robust_vpss() {
     let _original_c0 = commitments[0];
     let v1 = commitments[1];
     commitments[0] += v1;
-    
+
     // Now verify(t, ...) should fail, but robust_vpss_verify should succeed and exclude index 0
     assert!(!verify(t, &coalition, &commitments));
     let res2 = robust_vpss_verify(t, &coalition, &commitments).unwrap();
@@ -380,7 +384,7 @@ pub fn test_robust_vpss() {
     let res3 = robust_vpss_verify(t, &coalition, &commitments).unwrap();
     assert_eq!(res3.len(), (n - 2) as usize);
     assert!(!res3.iter().any(|(id, _)| *id == 1 || *id == 2));
-    
+
     // Corrupt three commitments. Should fail since we only have 4 honest nodes left (need 5).
     let v3 = commitments[3];
     commitments[2] += v3;
@@ -390,7 +394,7 @@ pub fn test_robust_vpss() {
 #[test]
 pub fn test_gen() {
     let keys = Key::keygen(7, 3);
-    let ppkeys: Vec<PreprocKey> = keys.iter().map(|x| PreprocKey::preproc(x)).collect();
+    let ppkeys: Vec<PreprocKey> = keys.iter().map(PreprocKey::preproc).collect();
     let mut rng = rand::thread_rng();
     let mut w = [0u8; 32];
     rng.fill_bytes(&mut w);
@@ -398,8 +402,8 @@ pub fn test_gen() {
 
     // Try interpolating different subsets and check that the answer is
     // the same
-    let interp1 = interpolate(&vec![1, 2, 3, 4, 5], &evals[0..=4], 0);
-    let interp2 = interpolate(&vec![3, 4, 5, 6, 7], &evals[2..=6], 0);
+    let interp1 = interpolate(&[1, 2, 3, 4, 5], &evals[0..=4], 0);
+    let interp2 = interpolate(&[3, 4, 5, 6, 7], &evals[2..=6], 0);
     println!("interp1 = {:?}", interp1);
     println!("interp2 = {:?}", interp2);
     assert!(interp1 == interp2);
@@ -408,18 +412,18 @@ pub fn test_gen() {
 #[test]
 pub fn test_combinecomm() {
     let keys = Key::keygen(7, 3);
-    let ppkeys: Vec<PreprocKey> = keys.iter().map(|x| PreprocKey::preproc(x)).collect();
+    let ppkeys: Vec<PreprocKey> = keys.iter().map(PreprocKey::preproc).collect();
     let mut rng = rand::thread_rng();
     let mut w = [0u8; 32];
     rng.fill_bytes(&mut w);
     let commitments: Vec<RistrettoPoint> = ppkeys.iter().map(|k| k.gen(&w).1).collect();
 
-    let comm1 = combinecomm(3, &vec![1, 2, 3, 4, 5], &commitments[0..=4]);
-    let comm2 = combinecomm(3, &vec![3, 4, 5, 6, 7], &commitments[2..=6]);
+    let comm1 = combinecomm(3, &[1, 2, 3, 4, 5], &commitments[0..=4]);
+    let comm2 = combinecomm(3, &[3, 4, 5, 6, 7], &commitments[2..=6]);
     assert_ne!(comm1, None);
     assert_ne!(comm2, None);
 
     // Test a failure case
-    let comm3 = combinecomm(3, &vec![1, 2, 3, 4, 6], &commitments[0..=4]);
+    let comm3 = combinecomm(3, &[1, 2, 3, 4, 6], &commitments[0..=4]);
     assert_eq!(comm3, None);
 }

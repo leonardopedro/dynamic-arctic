@@ -1,18 +1,21 @@
-mod types;
 mod arctic;
 pub mod arctic_core;
-pub mod shine_core;
 mod lagrange;
+pub mod shine_core;
+mod types;
 
-use axum::{routing::{get, post}, Router, Json, extract::State};
+use axum::{
+    extract::State,
+    routing::{get, post},
+    Json, Router,
+};
 use serde_json::{json, Value};
 use std::sync::Arc;
-use tokio::net::TcpListener;
-use bs58;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::net::TcpListener;
 
-use crate::types::{DelegationRequest, DelegationCertificate};
-use crate::arctic::{ArcticNode, derive_session_id, aggregate_signatures};
+use crate::arctic::{aggregate_signatures, derive_session_id, ArcticNode};
+use crate::types::{DelegationCertificate, DelegationRequest};
 
 struct AppState {
     nodes: Vec<ArcticNode>,
@@ -29,11 +32,11 @@ async fn main() {
     // t=3, n=7 allows native robustness against up to 2 malicious nodes
     let t = 3;
     let n = 7;
-    
+
     // Simulate DKG output
     // In this project, we create a fresh key set for the 7 nodes.
     let (group_pk, _, _) = arctic_core::keygen(n, t);
-    
+
     // Map Ristretto group_pk to multibase for DID document representation
     let pk_bytes = group_pk.compress().to_bytes();
     let mut codec_bytes = vec![0xed, 0x01]; // ed25519-pub multicodec
@@ -43,7 +46,7 @@ async fn main() {
     let nodes: Vec<ArcticNode> = (1..=n)
         .map(|i| ArcticNode::new(i, [i as u8; 32], t, n))
         .collect();
-    
+
     let state = Arc::new(AppState {
         nodes,
         threshold: t,
@@ -87,52 +90,66 @@ async fn handle_delegate(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<DelegationRequest>,
 ) -> Json<Value> {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-    
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
     // Create the Delegation Certificate
     let cert = DelegationCertificate {
         issuer_did: format!("did:web:{}", state.domain),
         delegatee_pk: payload.hot_key_pk_multibase,
-        expires_at: now + (30 * 24 * 60 * 60), 
+        expires_at: now + (30 * 24 * 60 * 60),
         capabilities: vec!["atproto-signing".to_string()],
     };
 
     let cert_bytes = serde_json::to_vec(&cert).unwrap();
-    
+
     // --- APPENDIX C: NATIVE ROBUSTNESS (NO COORDINATOR RETRY LOOP) ---
-    
+
     // 1. ROUND 1: Deterministic broadcast to collect commitments
     let session_id = derive_session_id(&cert_bytes);
     let mut r1_payloads = vec![];
     for node in &state.nodes {
         r1_payloads.push(node.process_round_1(session_id));
     }
-    
+
     // 2. ROUND 2: Broadcast R1 set and collect shares
     let coalition: Vec<u32> = r1_payloads.iter().map(|p| p.sender_node_id).collect();
-    let r1_commitments: Vec<(u32, [u8; 32])> = r1_payloads.iter()
+    let r1_commitments: Vec<(u32, [u8; 32])> = r1_payloads
+        .iter()
         .map(|p| (p.sender_node_id, p.data.r_point))
         .collect();
-        
+
     let mut r2_payloads = vec![];
     for node in &state.nodes {
         // In robust mode, nodes follow a linear path. We simulate broad receiving here.
-        if let Ok(share) = node.process_round_2(session_id, &coalition, &r1_commitments, &cert_bytes) {
+        if let Ok(share) =
+            node.process_round_2(session_id, &coalition, &r1_commitments, &cert_bytes)
+        {
             r2_payloads.push(share);
         }
     }
-    
+
     // 3. COMBINE: Use identifiable abort to isolate honest shares
     // We use the common group key and player pubkeys stored in the first node for this demo state.
     let group_pk = &state.nodes[0].core_key.pk;
     let player_pks = &state.nodes[0].player_pubkeys;
 
-    match aggregate_signatures(&cert_bytes, session_id, &r1_payloads, &r2_payloads, group_pk, player_pks, state.threshold) {
+    match aggregate_signatures(
+        &cert_bytes,
+        session_id,
+        &r1_payloads,
+        &r2_payloads,
+        group_pk,
+        player_pks,
+        state.threshold,
+    ) {
         Ok(sig) => Json(json!({
             "status": "success",
             "certificate": cert,
             "authority_signature": hex::encode(sig.to_bytes())
         })),
-        Err(e) => Json(json!({ "status": "error", "message": e }))
+        Err(e) => Json(json!({ "status": "error", "message": e })),
     }
 }

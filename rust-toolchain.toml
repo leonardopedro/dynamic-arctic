@@ -1,0 +1,7 @@
+# Pinned Rust toolchain for the arctic threshold-signature crate.
+#
+# Consumed by australVM (arctic_authority → arctic path dep); rustup honors
+# this file for every cargo invocation, so the crate builds with exactly this
+# compiler for local devs and any future CI. Bump deliberately.
+[toolchain]
+channel = "1.97.1"

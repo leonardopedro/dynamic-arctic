@@ -20,7 +20,6 @@
 
 use curve25519_dalek::scalar::Scalar;
 
-
 // Versions that just compute coefficients; these are used if you know
 // all of your input points are correct
 
@@ -207,14 +206,7 @@ fn sum_polys_is_x_to_the_i(polys: &[ScalarPoly], i: usize) {
     }
     println!("sum = {:?}", sum);
     for j in 0..sum.coeffs.len() {
-        assert!(
-            sum.coeffs[j]
-                == if i == j {
-                    Scalar::ONE
-                } else {
-                    Scalar::ZERO
-                }
-        );
+        assert!(sum.coeffs[j] == if i == j { Scalar::ONE } else { Scalar::ZERO });
     }
 }
 

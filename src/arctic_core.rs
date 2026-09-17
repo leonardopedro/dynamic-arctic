@@ -42,7 +42,13 @@ pub struct SecKey {
 
 impl SecKey {
     pub fn new(t: u32, k: u32, sk: Scalar, shine_key: shine::PreprocKey, pk: PubKey) -> Self {
-        Self { t, k, sk, shine_key, pk }
+        Self {
+            t,
+            k,
+            sk,
+            shine_key,
+            pk,
+        }
     }
 
     pub fn delta(&self) -> usize {
@@ -59,7 +65,7 @@ impl SecKey {
             coeffs.push(Scalar::random(&mut rng));
         }
         let poly = ScalarPoly { coeffs };
-        
+
         (1..=n).map(|i| poly.eval(&Scalar::from(i))).collect()
     }
 
@@ -249,8 +255,11 @@ pub fn robust_combine(
     sigshares: &[Scalar],
     player_pubkeys: &[PubKey],
 ) -> Option<Signature> {
-    let commitments: Vec<RistrettoPoint> = r1_outputs.iter().map(|(_, commitment)| *commitment).collect();
-    
+    let commitments: Vec<RistrettoPoint> = r1_outputs
+        .iter()
+        .map(|(_, commitment)| *commitment)
+        .collect();
+
     // 1. Identify valid commitments using Robust VPSS
     let valid_nodes = shine::robust_vpss_verify(t, coalition, &commitments).ok()?;
     let valid_ids: std::collections::HashSet<u32> = valid_nodes.iter().map(|(id, _)| *id).collect();
@@ -262,30 +271,40 @@ pub fn robust_combine(
             filtered_indices.push(i);
         }
     }
-    
+
     let filtered_coalition: Vec<u32> = filtered_indices.iter().map(|&i| coalition[i]).collect();
-    let filtered_commitments: Vec<RistrettoPoint> = filtered_indices.iter().map(|&i| commitments[i]).collect();
-    
+    let filtered_commitments: Vec<RistrettoPoint> =
+        filtered_indices.iter().map(|&i| commitments[i]).collect();
+
     // 2. Compute the challenge c based on the valid supermajority
     // Appendix C: $|C| \ge 2t-1$ for unique polynomial reconstruction.
     let filtered_polys = lagrange_polys(&filtered_coalition);
     let combcomm = shine::agg_polys(t, &filtered_polys, &filtered_commitments);
     let c = hash3(&combcomm, pk, msg);
 
-    // 3. Verify individual signature shares (Identifiable Abort)
+    // 3. Verify individual signature shares (Identifiable Abort).
+    //
+    // Arctic convention (a): sign shares are z_i = my_eval_i + c·sk_i (see
+    // `sign2`), so the per-share check is g^z_i == R_i + c·PK_i — WITHOUT the
+    // Lagrange factor L_i(0) (L_i(0) only enters at interpolation: the
+    // aggregate z = Σ L_i(0)·z_i, checked in step 4). Multiplying c by L_i(0)
+    // here would reject every honest share (regression caught by
+    // `test_robust_combine_identifiable_abort_single_malicious`).
     let mut honest_indices = vec![];
     for (idx, &orig_idx) in filtered_indices.iter().enumerate() {
         let node_id = coalition[orig_idx];
         let z_i = sigshares[orig_idx];
         let r_i = commitments[orig_idx];
         let pk_i = player_pubkeys[(node_id - 1) as usize];
-        let l_i_0 = filtered_polys[idx].coeffs[0];
 
-        // verification: g^z_i == R_i + c * L_i(0) * PK_i
-        if shine::commit(&z_i) == r_i + (c * l_i_0) * pk_i {
+        // verification: g^z_i == R_i + c * PK_i
+        if shine::commit(&z_i) == r_i + c * pk_i {
             honest_indices.push(idx);
         } else {
-            println!("🚨 IDENTIFIABLE ABORT: Node {} sent a mathematically invalid share! Excluding.", node_id);
+            println!(
+                "🚨 IDENTIFIABLE ABORT: Node {} sent a mathematically invalid share! Excluding.",
+                node_id
+            );
         }
     }
 
@@ -294,10 +313,16 @@ pub fn robust_combine(
     }
 
     // 4. Combine using only honest shares
-    let honest_coalition: Vec<u32> = honest_indices.iter().map(|&i| filtered_coalition[i]).collect();
-    let honest_shares: Vec<Scalar> = honest_indices.iter().map(|&i| sigshares[filtered_indices[i]]).collect();
+    let honest_coalition: Vec<u32> = honest_indices
+        .iter()
+        .map(|&i| filtered_coalition[i])
+        .collect();
+    let honest_shares: Vec<Scalar> = honest_indices
+        .iter()
+        .map(|&i| sigshares[filtered_indices[i]])
+        .collect();
     let honest_polys = lagrange_polys(&honest_coalition);
-    
+
     let z = interpolate_polys_0(&honest_polys, &honest_shares);
 
     if shine::commit(&z) == combcomm + c * pk {
@@ -507,6 +532,138 @@ pub fn test_arctic_bad6() {
     );
 }
 
+/// Serialize an Arctic aggregate signature to its 64-byte wire form:
+/// `(compressed RistrettoPoint, Scalar)` — the exact layout that
+/// `unfer_consensus::signing::verify_arctic_threshold` consumes (and the
+/// size of every `ConsensusTransaction` op's `signature` field).
+pub fn signature_to_bytes(sig: &Signature) -> [u8; 64] {
+    let mut out = [0u8; 64];
+    out[..32].copy_from_slice(sig.0.compress().as_bytes());
+    out[32..].copy_from_slice(&sig.1.to_bytes());
+    out
+}
+
+#[test]
+pub fn test_robust_combine_identifiable_abort_single_malicious() {
+    // Appendix C.1 end-to-end: one malicious node sends a mathematically
+    // invalid signature share (but a valid round-1 commitment, so Robust VPSS
+    // keeps it in the coalition). `robust_combine` must *identify* the bad
+    // share, exclude exactly that node, and still produce a valid signature
+    // from the honest majority.
+    let n = 7u32;
+    let t = 4u32;
+
+    let (pubkey, player_pubkeys, seckeys) = keygen(n, t);
+    let coalition = (1..=n).collect::<Vec<u32>>();
+    let msg = b"A message to be signed";
+
+    let r1_outputs: Vec<R1Output> = seckeys
+        .iter()
+        .map(|key| sign1(key, &coalition, msg))
+        .collect();
+    let mut sigshares: Vec<Scalar> = seckeys
+        .iter()
+        .map(|key| sign2(&pubkey, key, &coalition, msg, &r1_outputs).unwrap())
+        .collect();
+
+    // Node 0 sends a corrupt signature share (commitment stays valid).
+    sigshares[0] += Scalar::ONE;
+
+    // The plain combine must reject the corrupted aggregate…
+    assert_eq!(
+        combine(&pubkey, t, &coalition, msg, &r1_outputs, &sigshares),
+        None
+    );
+    // …but the robust combine isolates the bad node and still signs.
+    let sig = robust_combine(
+        &pubkey,
+        t,
+        &coalition,
+        msg,
+        &r1_outputs,
+        &sigshares,
+        &player_pubkeys,
+    )
+    .expect("robust combine must succeed with one malicious share");
+    assert!(verify(&pubkey, msg, &sig));
+}
+
+#[test]
+pub fn test_robust_combine_too_many_malicious_returns_none() {
+    // When the corrupted shares outnumber the honest remainder (fewer than t
+    // honest shares survive), robust combine must refuse rather than emit a
+    // bogus signature.
+    let n = 7u32;
+    let t = 4u32;
+
+    let (pubkey, player_pubkeys, seckeys) = keygen(n, t);
+    let coalition = (1..=n).collect::<Vec<u32>>();
+    let msg = b"A message to be signed";
+
+    let r1_outputs: Vec<R1Output> = seckeys
+        .iter()
+        .map(|key| sign1(key, &coalition, msg))
+        .collect();
+    let mut sigshares: Vec<Scalar> = seckeys
+        .iter()
+        .map(|key| sign2(&pubkey, key, &coalition, msg, &r1_outputs).unwrap())
+        .collect();
+
+    // Corrupt 4 of 7 shares: only 3 honest shares remain < t = 4.
+    for s in sigshares.iter_mut().take(4) {
+        *s += Scalar::ONE;
+    }
+    assert_eq!(
+        robust_combine(
+            &pubkey,
+            t,
+            &coalition,
+            msg,
+            &r1_outputs,
+            &sigshares,
+            &player_pubkeys,
+        ),
+        None
+    );
+}
+
+#[test]
+pub fn test_arctic_signature_64_byte_roundtrip() {
+    // The aggregate signature must round-trip through the 64-byte wire form
+    // (the `signature` field layout) and verify after deserialization.
+    let n = 7u32;
+    let t = 4u32;
+    let (pubkey, _, seckeys) = keygen(n, t);
+    let coalition = (1..=n).collect::<Vec<u32>>();
+    let msg = b"A message to be signed";
+
+    let r1_outputs: Vec<R1Output> = seckeys
+        .iter()
+        .map(|key| sign1(key, &coalition, msg))
+        .collect();
+    let sigshares: Vec<Scalar> = seckeys
+        .iter()
+        .map(|key| sign2(&pubkey, key, &coalition, msg, &r1_outputs).unwrap())
+        .collect();
+    let sig = combine(&pubkey, t, &coalition, msg, &r1_outputs, &sigshares).unwrap();
+
+    let bytes = signature_to_bytes(&sig);
+    assert_eq!(bytes.len(), 64);
+
+    // Deserialize exactly the way verify_arctic_threshold does.
+    let r_point = curve25519_dalek::ristretto::CompressedRistretto::from_slice(&bytes[..32])
+        .expect("R must deserialize")
+        .decompress()
+        .expect("R must decompress");
+    let z = Scalar::from_canonical_bytes(bytes[32..].try_into().unwrap())
+        .into_option()
+        .expect("z must be canonical");
+    let roundtripped: Signature = (r_point, z);
+    assert_eq!(roundtripped.0, sig.0);
+    assert_eq!(roundtripped.1, sig.1);
+    assert!(verify(&pubkey, msg, &roundtripped));
+}
+
 #[test]
 pub fn test_pss_resharing() {
     let n = 10u32;
@@ -516,7 +673,10 @@ pub fn test_pss_resharing() {
     let msg = b"Test resharing";
 
     // 1. Verify we can sign BEFORE resharing
-    let r1_old: Vec<R1Output> = seckeys[0..5].iter().map(|sk| sign1(sk, &coalition, msg)).collect();
+    let r1_old: Vec<R1Output> = seckeys[0..5]
+        .iter()
+        .map(|sk| sign1(sk, &coalition, msg))
+        .collect();
     let sigshares_old: Vec<Scalar> = seckeys[0..5]
         .iter()
         .map(|sk| sign2(&pubkey, sk, &coalition, msg, &r1_old).unwrap())
@@ -527,21 +687,24 @@ pub fn test_pss_resharing() {
     // 2. Perform Resharing Ceremony
     // Each node generates its reshare packets.
     let mut shares_matrix: Vec<Vec<Scalar>> = Vec::new();
-    for i in 0..n as usize {
-        shares_matrix.push(seckeys[i].generate_reshare_packet(n));
+    for sk in &seckeys {
+        shares_matrix.push(sk.generate_reshare_packet(n));
     }
 
     // Nodes receive shares from everyone.
     for i in 0..n as usize {
         let mut my_received: Vec<Scalar> = Vec::new();
-        for j in 0..n as usize {
-            my_received.push(shares_matrix[j][i]);
+        for row in &shares_matrix {
+            my_received.push(row[i]);
         }
         seckeys[i].apply_reshare_packets(&my_received);
     }
 
     // 3. Signature after resharing (Same coalition, same message)
-    let r1_outputs: Vec<R1Output> = seckeys[0..5].iter().map(|sk| sign1(sk, &coalition, msg)).collect();
+    let r1_outputs: Vec<R1Output> = seckeys[0..5]
+        .iter()
+        .map(|sk| sign1(sk, &coalition, msg))
+        .collect();
     let sigshares_new: Vec<Scalar> = seckeys[0..5]
         .iter()
         .map(|sk| sign2(&pubkey, sk, &coalition, msg, &r1_outputs).unwrap())
