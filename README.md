@@ -1,3 +1,5 @@
+ALL IN THIS REPOSITORY IS WORK IN PROGRESS, MOSTLY AI GENERATED, PROBABLY NOTHING WORKS
+
 # 🧊 Arctic Authority: Distributed Collective Authority for AT Protocol
 
 > **Status**: [PROTOTYPE] This project implements the **Arctic** threshold signature scheme with **Native Robustness (Appendix C/C.1)**. By moving beyond the ROAST coordinator layer, we achieve robustness purely through mathematics, eliminating network retry-loops while preserving absolute statelessness.
