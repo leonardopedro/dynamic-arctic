@@ -11,6 +11,7 @@ dependencies = [
  "curve25519-dalek",
  "ed25519-dalek",
  "hex",
+ "http-body-util",
  "itertools",
  "rand",
  "serde",
@@ -19,6 +20,7 @@ dependencies = [
  "sha2",
  "subtle",
  "tokio",
+ "tower",
 ]
 
 [[package]]

@@ -20,7 +20,6 @@ use crate::types::{DelegationCertificate, DelegationRequest};
 struct AppState {
     nodes: Vec<ArcticNode>,
     threshold: u32,
-    #[allow(dead_code)]
     total_nodes: u32,
     master_pubkey_multibase: String,
     domain: String,
@@ -56,15 +55,47 @@ async fn main() {
     });
 
     // 2. HTTP Server
-    let app = Router::new()
-        .route("/.well-known/did.json", get(serve_did_document))
-        .route("/api/v1/delegate", post(handle_delegate))
-        .with_state(state);
+    let app = app(state);
 
     let addr = "0.0.0.0:3000";
     let listener = TcpListener::bind(addr).await.unwrap();
     println!("Stateless Arctic Authority (Native Robustness) live on port 3000...");
     axum::serve(listener, app).await.unwrap();
+}
+
+/// Build the HTTP surface (X6).
+///
+/// Extracted from `main` so the routes can be exercised by an integration test
+/// through `tower::ServiceExt::oneshot` -- no port, no listener, no sleep. A
+/// health check you can only reach by starting the process is a health check
+/// nobody runs.
+fn app(state: Arc<AppState>) -> Router {
+    Router::new()
+        .route("/.well-known/did.json", get(serve_did_document))
+        .route("/api/v1/delegate", post(handle_delegate))
+        .route("/healthz", get(healthz))
+        .route("/version", get(version))
+        .with_state(state)
+}
+
+/// Liveness. Deliberately does **not** touch the node set or the threshold: it
+/// answers "this process is up and serving", and a dependency-free probe is the
+/// only kind that stays useful when something downstream is broken. Readiness
+/// questions belong in `/version`, which reports configuration.
+async fn healthz() -> Json<Value> {
+    Json(json!({ "status": "ok" }))
+}
+
+/// Build and configuration identity (X6), mirroring `unfer_agent`'s `version`
+/// op so an operator has one shape to check across the project's processes.
+async fn version(State(state): State<Arc<AppState>>) -> Json<Value> {
+    Json(json!({
+        "name": "arctic-authority",
+        "version": env!("CARGO_PKG_VERSION"),
+        "threshold": state.threshold,
+        "total_nodes": state.total_nodes,
+        "domain": state.domain,
+    }))
 }
 
 async fn serve_did_document(State(state): State<Arc<AppState>>) -> Json<Value> {
@@ -151,5 +182,115 @@ async fn handle_delegate(
             "authority_signature": hex::encode(sig.to_bytes())
         })),
         Err(e) => Json(json!({ "status": "error", "message": e })),
+    }
+}
+
+#[cfg(test)]
+mod ops_surface {
+    //! X6 — the ops surface, exercised through the real router.
+    //!
+    //! These drive `app()` via `tower::ServiceExt::oneshot`, so routing,
+    //! extractors and serialization are covered without binding a port or
+    //! sleeping on a listener. A health check you can only reach by starting the
+    //! process is a health check nobody runs.
+    //!
+    //! They live here rather than in `tests/` because `AppState` is private to
+    //! this *binary* target; an integration test would link the library, which
+    //! does not contain the routes. What is exercised is still the real router --
+    //! only the process boundary is gone.
+
+    use super::*;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    fn state() -> Arc<AppState> {
+        Arc::new(AppState {
+            nodes: Vec::new(),
+            threshold: 2,
+            total_nodes: 3,
+            master_pubkey_multibase: "zTEST".to_string(),
+            domain: "authority.example".to_string(),
+        })
+    }
+
+    /// The same configuration as  but with a different .
+    fn state_with(total_nodes: u32) -> Arc<AppState> {
+        Arc::new(AppState {
+            nodes: Vec::new(),
+            threshold: 2,
+            total_nodes,
+            master_pubkey_multibase: "zTEST".to_string(),
+            domain: "authority.example".to_string(),
+        })
+    }
+
+    async fn call(app: Router, uri: &str) -> (StatusCode, Value) {
+        let response = app
+            .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+            .await
+            .expect("router responded");
+        let status = response.status();
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+        (status, value)
+    }
+
+    #[tokio::test]
+    async fn healthz_reports_ok() {
+        let (status, body) = call(app(state()), "/healthz").await;
+        assert_eq!(StatusCode::OK, status, "/healthz must answer 200");
+        assert_eq!(json!({ "status": "ok" }), body);
+    }
+
+    #[tokio::test]
+    async fn version_reports_the_crate_version_and_the_threshold_in_force() {
+        let (status, body) = call(app(state()), "/version").await;
+        assert_eq!(StatusCode::OK, status);
+        assert_eq!(env!("CARGO_PKG_VERSION"), body["version"]);
+        assert_eq!("arctic-authority", body["name"]);
+        // The *configured* threshold, not a default: an operator reading this
+        // is asking how many shares the live process will accept.
+        assert_eq!(2, body["threshold"]);
+        assert_eq!(3, body["total_nodes"]);
+    }
+
+    #[tokio::test]
+    async fn healthz_does_not_depend_on_node_configuration() {
+        // A probe that reads node state stops answering exactly when it is most
+        // needed, so /healthz is deliberately free of it. Both an empty and a
+        // populated state answer identically.
+        let empty = call(app(state()), "/healthz").await;
+        let full = call(app(state_with(1)), "/healthz").await;
+        assert_eq!(empty.1, full.1);
+    }
+
+    #[tokio::test]
+    async fn the_existing_routes_still_resolve() {
+        // Adding endpoints must not have displaced the two that already existed.
+        let (status, body) = call(app(state()), "/.well-known/did.json").await;
+        assert_eq!(StatusCode::OK, status);
+        assert!(
+            body["id"]
+                .as_str()
+                .unwrap_or_default()
+                .starts_with("did:web:"),
+            "DID document must still serve a did:web id, got {}",
+            body["id"]
+        );
+
+        let (status, _) = call(app(state()), "/api/v1/delegate").await;
+        assert_eq!(
+            StatusCode::METHOD_NOT_ALLOWED,
+            status,
+            "delegate is POST-only; a GET must not fall through to a handler"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_unknown_path_is_404_not_a_catch_all() {
+        let (status, _) = call(app(state()), "/nope").await;
+        assert_eq!(StatusCode::NOT_FOUND, status);
     }
 }

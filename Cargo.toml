@@ -33,3 +33,9 @@ subtle = { version = "2.6", optional = true }
 name = "arctic"
 path = "src/main.rs"
 required-features = ["server"]
+
+[dev-dependencies]
+# `oneshot` drives the router in-process, so the X6 health/version integration
+# tests need no listener and no port. `util` is the feature that provides it.
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
