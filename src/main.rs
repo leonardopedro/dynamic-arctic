@@ -1,5 +1,6 @@
 mod arctic;
 pub mod arctic_core;
+mod config;
 mod lagrange;
 pub mod shine_core;
 mod types;
@@ -25,12 +26,49 @@ struct AppState {
     domain: String,
 }
 
+/// `arctic init` — write a commented starter config and exit.
+///
+/// The onboarding half of C3. Deterministic for given answers, so the output is
+/// assertable rather than eyeballed, and the generated file parses back to the
+/// configuration the operator answered with.
+fn init_subcommand(answers: &config::InitAnswers) -> std::io::Result<()> {
+    print!("{}", config::init_config(answers));
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() {
+    // C3: defaults < config file < environment < flags. `init` short-circuits --
+    // it must not need a config file to produce one.
+    if std::env::args().nth(1).as_deref() == Some("init") {
+        // Defaults come from the resolver, so the file `init` writes always
+        // agrees with what the server would run with. Deriving them from
+        // literals here is how the generated file came to say `threshold = "2"`
+        // while the process used 3.
+        let (base, _) = config::Config::resolve(None, &|_| None, &config::Flags::default());
+        let answers = config::InitAnswers {
+            domain: base.domain,
+            threshold: base.threshold,
+            total_nodes: base.total_nodes,
+        };
+        init_subcommand(&answers).expect("write starter config to stdout");
+        return;
+    }
+
+    // C3: resolve before anything is derived from the parameters. Defaults are
+    // the values this binary always used (t=3, n=7 -> native robustness against
+    // up to 2 malicious nodes), so configuration can only change them
+    // deliberately.
+    let (cfg, prov) =
+        config::Config::resolve(None, &|k| std::env::var(k).ok(), &config::Flags::default());
+    if let Err(why) = cfg.validate() {
+        eprintln!("arctic: invalid configuration: {why}");
+        std::process::exit(2);
+    }
+
     // 1. Bootstrap Authority with Robust Parameters (Appendix C)
-    // t=3, n=7 allows native robustness against up to 2 malicious nodes
-    let t = 3;
-    let n = 7;
+    let t = cfg.threshold;
+    let n = cfg.total_nodes;
 
     // Simulate DKG output
     // In this project, we create a fresh key set for the 7 nodes.
@@ -51,15 +89,22 @@ async fn main() {
         threshold: t,
         total_nodes: n,
         master_pubkey_multibase: multibase,
-        domain: "authority.yourdomain.com".to_string(),
+        domain: cfg.domain.clone(),
     });
 
     // 2. HTTP Server
     let app = app(state);
 
-    let addr = "0.0.0.0:3000";
-    let listener = TcpListener::bind(addr).await.unwrap();
-    println!("Stateless Arctic Authority (Native Robustness) live on port 3000...");
+    let addr = cfg.bind_addr.clone();
+    // Print where each value came from. Precedence is only trustworthy if an
+    // operator can see which layer won.
+    eprintln!("arctic: config provenance {}", prov.to_json());
+    let listener = TcpListener::bind(&addr).await.unwrap();
+    println!(
+        "Stateless Arctic Authority (Native Robustness) live on {addr} \
+         (t={t}, n={n}, domain={})",
+        cfg.domain
+    );
     axum::serve(listener, app).await.unwrap();
 }
 

@@ -6,8 +6,13 @@ start, verify, and what each endpoint is for.
 ## Start
 
 ```sh
-cargo run --features server            # 0.0.0.0:3000
+cargo run --features server            # 0.0.0.0:3000, t=3 n=7
+
+cargo run --bin arctic --features server -- init > arctic.toml
 ```
+
+`init` prints a commented starter config to stdout. Redirect it, or read it and
+paste -- it is deterministic, so the same answers always give the same file.
 
 `server` is a default feature; `--no-default-features` builds the library alone,
 which is how `unfer/unfer_consensus` consumes it for `MintAuthority::Threshold`.
@@ -57,8 +62,27 @@ Precedence, lowest to highest:
 3. environment
 4. command-line flags
 
-Values are read once at startup; there is no hot reload. `threshold`,
-`total_nodes` and `domain` come from the process configuration.
+Values are read once at startup; there is no hot reload.
+
+| key | env | default |
+|---|---|---|
+| `bind_addr` | `ARCTIC_BIND_ADDR` | `0.0.0.0:3000` |
+| `domain` | `ARCTIC_DOMAIN` | `authority.yourdomain.com` |
+| `threshold` | `ARCTIC_THRESHOLD` | `3` |
+| `total_nodes` | `ARCTIC_TOTAL_NODES` | `7` |
+
+`threshold` and `total_nodes` are the ceremony's robustness parameters. The
+defaults are the values this binary has always used (`t=3, n=7` tolerates up to
+2 malicious nodes); a threshold above `total_nodes` is refused at startup rather
+than at signing time, where it would look like a network partition.
+
+A malformed or zero value falls through to the layer below instead of aborting
+startup -- a typo in an env var should not take the authority down. Startup
+prints where each value came from:
+
+    arctic: config provenance {"bind_addr":"default","domain":"env",...}
+
+so precedence is something you can read rather than something you trust.
 
 ## Rotate and revoke
 
@@ -87,7 +111,7 @@ and domain. That is deployment configuration, not runtime state.
 ## Verify
 
 ```sh
-cargo test                              # 24 tests (19 library + 5 ops surface)
+cargo test                              # 35 (19 library + 5 ops surface + 11 config)
 cargo clippy --all-targets -- -D warnings
 ```
 
