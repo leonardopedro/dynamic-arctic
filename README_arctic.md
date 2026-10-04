@@ -1,11 +1,16 @@
 # Arctic: Lightweight, Stateless, and Deterministic Two-Round Threshold Schnorr Signatures
 
+<!-- status: verified | tests: 19 cargo | last_verified: 2026-10-04 -->
+
 > Status: the Arctic/Shine library (`arctic_core`, `shine_core`) is functional —
-> 32 unit tests pass (`cargo test`). The AT-Protocol authority server in
-> `src/main.rs` is a prototype; build it with `cargo build --features server`
-> (the default). The library itself has no server dependencies and is reused as
-> a path dependency by `unfer/unfer_consensus` for the certificate ledger's
-> threshold mint authority (`MintAuthority::Threshold`, see `PROJECT_PLAN.md`).
+> **19 unit tests pass** (`cargo test`, last run 2026-10-04). This file
+> previously said 32; `cargo test -- --list` double-counts each test across the
+> lib and bin targets, and the run reports 19. The AT-Protocol authority server
+> in `src/main.rs` is a prototype; it builds under the default `server` feature.
+> The library itself has no server dependencies and is reused as a path
+> dependency by `unfer/unfer_consensus` for the certificate ledger's threshold
+> mint authority (`MintAuthority::Threshold`, see `PROJECT_PLAN.md`), which is
+> why `cargo build --no-default-features` is part of the verification set.
 
 Code by Ian Goldberg, iang@uwaterloo.ca
 

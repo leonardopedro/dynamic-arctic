@@ -1,4 +1,22 @@
-ALL IN THIS REPOSITORY IS WORK IN PROGRESS, MOSTLY AI GENERATED, PROBABLY NOTHING WORKS
+<!-- status: verified | tests: 19 cargo | last_verified: 2026-10-04 -->
+
+## Verification
+
+```sh
+cargo test                          # 19 tests pass
+cargo clippy --all-targets -- -D warnings   # clean
+cargo build --no-default-features   # the shape unfer_consensus depends on
+```
+
+`unfer_consensus` takes this crate as a path dependency with
+`default-features = false` for `MintAuthority::Threshold`, so the library has to
+keep building without the `server` feature — that is a load-bearing build, not a
+formality, and it is checked above.
+
+What "verified" covers is the library: `arctic_core` (threshold Schnorr, 64-byte
+signature round-trip, PSS resharing), `shine_core` (keygen, robust VPSS,
+identifiable abort), and `lagrange`. The AT-Protocol HTTP authority is behind the
+default `server` feature and builds as part of `cargo test`.
 
 # 🧊 Arctic Authority: Distributed Collective Authority for AT Protocol
 
