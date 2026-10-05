@@ -134,5 +134,21 @@ cargo clippy --all-targets -- -D warnings
 ```
 
 The `ops_surface` tests drive the real router in-process through
-`tower::ServiceExt::oneshot`, so `/healthz` and `/version` are covered without
-binding a port. See `ATTRIBUTION.md` for the paper this implements.
+`tower::ServiceExt::oneshot`, so `/healthz`, `/version`, `/api/v1/delegate` and
+`/api/v1/messages` are covered without binding a port. See `ATTRIBUTION.md` for
+the paper this implements.
+
+## Deploying
+
+[`../../unfer/deploy/DEPLOY.md`](../../unfer/deploy/DEPLOY.md) covers booting
+`arctic` together with `unfer_edge` on a fresh machine: the systemd unit, the
+threshold/quorum ordering that this file's config section cannot express, the
+env-var reference with defaults, and secret handling. The unit lives in
+`unfer/deploy/systemd/arctic.service` rather than here, because C8's acceptance is
+that one document boots *both* servers, and two runbooks in two repositories is
+how an operator ends up with two half-correct setups.
+
+One thing worth repeating from there: **`arctic` without its quorum answers
+"insufficient shares" to every legitimate request.** That looks like a key
+problem and is not one, which is why the unit orders itself
+`After=unfer-nodes.target`.
