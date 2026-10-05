@@ -7,6 +7,8 @@ mod types;
 
 use axum::{
     extract::State,
+    http::StatusCode,
+    response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
@@ -144,9 +146,39 @@ fn app(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/.well-known/did.json", get(serve_did_document))
         .route("/api/v1/delegate", post(handle_delegate))
+        // C4: the same normalized message schema `unfer_edge` accepts at
+        // `POST /api/v1/ingest`.
+        .route("/api/v1/messages", post(handle_messages))
         .route("/healthz", get(healthz))
         .route("/version", get(version))
         .with_state(state)
+}
+
+/// C4: the normalized message ingress.
+///
+/// Delegates to `unfer_protocol::ingest::handle_ingest_body` — the *same*
+/// function `unfer_edge` calls — so the two servers cannot drift into answering a
+/// sender differently. Everything channel-specific stops at the JSON boundary.
+///
+/// This is a schema and a shape check, not a broker: nothing is queued, retried
+/// or delivered. A node that accepts a message has accepted it, and where it goes
+/// afterwards is a decision this server does not make yet.
+async fn handle_messages(body: axum::body::Bytes) -> Response {
+    use unfer_protocol::ingest::handle_ingest_body;
+    match handle_ingest_body(&body) {
+        Ok(ack) => (
+            StatusCode::OK,
+            [(axum::http::header::CONTENT_TYPE, "application/json")],
+            serde_json::to_vec(&ack).unwrap_or_else(|_| b"{}".to_vec()),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            [(axum::http::header::CONTENT_TYPE, "application/json")],
+            serde_json::json!({ "error": e.to_string() }).to_string(),
+        )
+            .into_response(),
+    }
 }
 
 /// Liveness. Deliberately does **not** touch the node set or the threshold: it
@@ -306,6 +338,110 @@ mod ops_surface {
         let bytes = response.into_body().collect().await.unwrap().to_bytes();
         let value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
         (status, value)
+    }
+
+    /// POST a JSON body, for the routes that take one.
+    async fn post_json(app: Router, uri: &str, body: &Value) -> (StatusCode, Value) {
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(uri)
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .expect("router responded");
+        let status = response.status();
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+        (status, value)
+    }
+
+    /// C4: the shared normalized message schema, on this surface.
+    #[tokio::test]
+    async fn messages_accepts_the_shared_schema() {
+        use unfer_protocol::ingest::{IngestBatch, IngestMessage, IngestSource};
+        let batch = IngestBatch::new(vec![
+            IngestMessage::new("m1", IngestSource::Telegram, "u1", "hello"),
+            IngestMessage::new("m2", IngestSource::Other("matrix".into()), "u2", "hi"),
+        ])
+        .unwrap();
+        let (status, body) = post_json(
+            app(state()),
+            "/api/v1/messages",
+            &serde_json::to_value(&batch).unwrap(),
+        )
+        .await;
+        assert_eq!(StatusCode::OK, status);
+        assert_eq!(body["accepted"], 2);
+        // Dedup keys are namespaced by source, and an unregistered source keeps
+        // its own name rather than being coerced to a known variant.
+        assert_eq!(body["ids"][0], "telegram:m1");
+        assert_eq!(body["ids"][1], "matrix:m2");
+        assert_eq!(body["unknown_sources"], 1);
+    }
+
+    /// C4: a partial accept is 200 with the refusals named, matching unfer_edge.
+    #[tokio::test]
+    async fn a_partial_accept_is_200_and_names_the_refusal() {
+        use unfer_protocol::ingest::{IngestBatch, IngestMessage, IngestSource};
+        let batch = IngestBatch::new(vec![
+            IngestMessage::new("m1", IngestSource::Telegram, "u1", "hi"),
+            IngestMessage::new("", IngestSource::Telegram, "u1", "no id"),
+        ])
+        .unwrap();
+        let (status, body) = post_json(
+            app(state()),
+            "/api/v1/messages",
+            &serde_json::to_value(&batch).unwrap(),
+        )
+        .await;
+        // Not 207: most senders retry the whole batch on any non-2xx, which would
+        // re-deliver the message that already succeeded.
+        assert_eq!(StatusCode::OK, status);
+        assert_eq!(body["accepted"], 1);
+        assert_eq!(body["rejected"][0]["index"], 1);
+        assert_eq!(body["rejected"][0]["error"], "MissingId");
+    }
+
+    #[tokio::test]
+    async fn a_malformed_envelope_is_400() {
+        for bad in [
+            json!({"messages": "not an array"}),
+            json!({}),
+            json!({"messages": [{"source": "telegram", "sender": "u", "text": "no id"}]}),
+        ] {
+            let (status, _) = post_json(app(state()), "/api/v1/messages", &bad).await;
+            assert_ne!(StatusCode::OK, status, "{bad}");
+        }
+    }
+
+    /// The two servers must agree, or "one ingest API" is only true of the type.
+    #[tokio::test]
+    async fn both_surfaces_answer_the_same_way_for_the_same_body() {
+        use unfer_protocol::ingest::{IngestBatch, IngestMessage, IngestSource};
+        let batch = IngestBatch::new(vec![IngestMessage::new(
+            "m1",
+            IngestSource::Webhook,
+            "u1",
+            "api_key=sk-live-abc123",
+        )])
+        .unwrap();
+        let raw = serde_json::to_value(&batch).unwrap();
+
+        let (arctic_status, arctic_body) = post_json(app(state()), "/api/v1/messages", &raw).await;
+
+        // The identical handler, reached without a proxy in front of it.
+        let edge_ack =
+            unfer_protocol::ingest::handle_ingest_body(raw.to_string().as_bytes()).unwrap();
+
+        assert_eq!(arctic_status.as_u16(), 200);
+        let arctic_ack: Value = serde_json::from_value(arctic_body).unwrap();
+        assert_eq!(arctic_ack, serde_json::to_value(&edge_ack).unwrap());
+        // And the secret is not echoed by either.
+        assert!(!arctic_ack.to_string().contains("abc123"));
     }
 
     #[tokio::test]
