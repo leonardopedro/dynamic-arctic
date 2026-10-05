@@ -80,9 +80,27 @@ A malformed or zero value falls through to the layer below instead of aborting
 startup -- a typo in an env var should not take the authority down. Startup
 prints where each value came from:
 
-    arctic: config provenance {"bind_addr":"default","domain":"env",...}
+    arctic: threshold (flag), domain (env), total_nodes (file), bind_addr (default)
 
 so precedence is something you can read rather than something you trust.
+
+Supply the file layer with `--config`, and override anything with flags. Both
+`--flag value` and `--flag=value` work:
+
+    arctic --config /etc/arctic/config.json
+    arctic --config ./c.json --threshold 5
+    arctic --threshold=5
+
+    arctic init          # write a starter config to stdout
+    arctic --help         # usage
+
+Keys in the config file may be written as JSON numbers (`"threshold": 3`) or as
+strings (`"threshold": "3"`); both are read. A fractional value like `2.5` is
+rejected rather than rounded.
+
+A `--config` path that does not exist, or that is not valid JSON, aborts startup
+with a message naming the file. It does not quietly fall back to defaults: a
+config layer that is silently ignored is worse than one that is absent.
 
 ## Rotate and revoke
 

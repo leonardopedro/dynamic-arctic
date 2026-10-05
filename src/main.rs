@@ -38,29 +38,55 @@ fn init_subcommand(answers: &config::InitAnswers) -> std::io::Result<()> {
 
 #[tokio::main]
 async fn main() {
-    // C3: defaults < config file < environment < flags. `init` short-circuits --
-    // it must not need a config file to produce one.
-    if std::env::args().nth(1).as_deref() == Some("init") {
-        // Defaults come from the resolver, so the file `init` writes always
-        // agrees with what the server would run with. Deriving them from
-        // literals here is how the generated file came to say `threshold = "2"`
-        // while the process used 3.
-        let (base, _) = config::Config::resolve(None, &|_| None, &config::Flags::default());
-        let answers = config::InitAnswers {
-            domain: base.domain,
-            threshold: base.threshold,
-            total_nodes: base.total_nodes,
-        };
-        init_subcommand(&answers).expect("write starter config to stdout");
-        return;
-    }
+    // C3: defaults < config file < environment < flags, and the command line is
+    // what actually supplies the last layer now. Before this, `resolve` accepted a
+    // file and flags and `main` passed `None` and `Flags::default()`, so the two
+    // lower layers existed only as a tested API nobody called -- which is how
+    // `arctic runbook` could claim a precedence order the binary did not have.
+    let invocation = match config::parse_args(&std::env::args().collect::<Vec<_>>()) {
+        Ok(v) => v,
+        Err(why) => {
+            eprintln!("arctic: {why}");
+            std::process::exit(2);
+        }
+    };
 
-    // C3: resolve before anything is derived from the parameters. Defaults are
-    // the values this binary always used (t=3, n=7 -> native robustness against
-    // up to 2 malicious nodes), so configuration can only change them
-    // deliberately.
+    // `init` short-circuits -- it must not need a config file to produce one.
+    let (file, flags) = match invocation {
+        config::Invocation::Init => {
+            // Defaults come from the resolver, so the file `init` writes always
+            // agrees with what the server would run with. Deriving them from
+            // literals here is how the generated file came to say `threshold = "2"`
+            // while the process used 3.
+            let (base, _) = config::Config::resolve(None, &|_| None, &config::Flags::default());
+            let answers = config::InitAnswers {
+                domain: base.domain,
+                threshold: base.threshold,
+                total_nodes: base.total_nodes,
+            };
+            init_subcommand(&answers).expect("write starter config to stdout");
+            return;
+        }
+        config::Invocation::Serve { file, flags } => (file, flags),
+    };
+
+    // The whole argv -> file -> env -> flags chain is one call so it can be
+    // tested. It used to be spelled out here, and every layer had a test while
+    // the line joining them had none.
     let (cfg, prov) =
-        config::Config::resolve(None, &|k| std::env::var(k).ok(), &config::Flags::default());
+        match config::resolve_invocation(&config::Invocation::Serve { file, flags }, &|k| {
+            std::env::var(k).ok()
+        }) {
+            Ok(Some(v)) => v,
+            Ok(None) => unreachable!("Serve always resolves to a configuration"),
+            Err(why) => {
+                eprintln!("arctic: {why}");
+                std::process::exit(2);
+            }
+        };
+    // Say where each value came from, so an operator debugging "why is it t=5"
+    // does not have to guess at a precedence order.
+    eprintln!("arctic: {prov}");
     if let Err(why) = cfg.validate() {
         eprintln!("arctic: invalid configuration: {why}");
         std::process::exit(2);

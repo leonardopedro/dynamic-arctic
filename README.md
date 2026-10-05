@@ -1,9 +1,9 @@
-<!-- status: verified | tests: 54 cargo | last_verified: 2026-10-05 -->
+<!-- status: verified | tests: 62 cargo | last_verified: 2026-10-05 -->
 
 ## Verification
 
 ```sh
-cargo test                          # 54 tests pass
+cargo test                          # 62 tests pass
 cargo clippy --all-targets -- -D warnings   # clean
 cargo build --no-default-features   # the shape unfer_consensus depends on
 ```
