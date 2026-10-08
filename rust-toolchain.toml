@@ -4,4 +4,5 @@
 # this file for every cargo invocation, so the crate builds with exactly this
 # compiler for local devs and any future CI. Bump deliberately.
 [toolchain]
-channel = "1.97.1"
+channel = "1.99.0"
+components = ["clippy", "rustfmt"]

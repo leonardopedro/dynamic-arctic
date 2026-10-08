@@ -9,7 +9,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # The crate pins its toolchain in rust-toolchain.toml (1.97.1 — consumed by
+  # The crate pins its toolchain in rust-toolchain.toml (1.99.0 — consumed by
   # australVM's arctic_authority via path dep). CI installs exactly that
   # channel from the file instead of pinning a channel here, so a deliberate
   # bump in rust-toolchain.toml is picked up automatically.

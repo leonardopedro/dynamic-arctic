@@ -13,7 +13,7 @@ keep it honest; don't claim more than the tests show).
 
 ## Toolchain
 
-- Rust **1.97.1**, pinned in `rust-toolchain.toml` — rustup installs it
+- Rust **1.99.0**, pinned in `rust-toolchain.toml` — rustup installs it
   automatically; CI reads the same file (deliberate bumps only, in lockstep
   with unfer/australVM/velysterm).
 
