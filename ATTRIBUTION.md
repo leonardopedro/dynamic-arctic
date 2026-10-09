@@ -6,7 +6,7 @@ cross-repo table — including what was deliberately **not** adopted — is
 
 | source | licence | what was adapted | where it landed |
 |---|---|---|---|
-| Arctic (Komlo & Goldberg, PKC 2025) | MIT (this repo) | the threshold-Schnorr scheme is implemented *from the paper*, which is credited in `README_arctic.md` | `src/arctic_core.rs`, `src/shine_core.rs` |
+| Arctic (Komlo & Goldberg, PKC 2025) | MIT (this repo) | the threshold-Schnorr scheme is implemented *from the paper*, which is credited in `README_UPSTREAM.md` | `src/arctic_core.rs`, `src/shine_core.rs` |
 
 ## Notes
 

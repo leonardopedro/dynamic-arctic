@@ -10,7 +10,7 @@ cargo build --no-default-features   # the shape unfer_consensus depends on
 
 The 66 is 19 library tests plus 47 in the `arctic` bin target (the AT-Protocol
 authority in `src/main.rs`), and `cargo test` runs both — `cargo test -- --list`
-reports the same 66, not double that. `README_arctic.md` quotes **19** because
+reports the same 66, not double that. `README_UPSTREAM.md` quotes **19** because
 it is scoped to the library alone; the two numbers measure different targets and
 neither is a correction of the other. This line was stale at 62 until
 2026-10-05; `scripts/check-status` checks that the block is present and sane,

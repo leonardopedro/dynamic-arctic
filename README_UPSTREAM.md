@@ -1,3 +1,11 @@
+> **Replayed upstream document.** Everything below is upstream's Arctic
+> README (the paper's artifact) as it was replayed into this fork, apart from
+> clearly-marked **Fork note** blockquotes and the status header above the
+> first paragraph. It is kept in `README_UPSTREAM.md` so that upstream's
+> instructions can never be mistaken for this fork's: build, test and verify
+> commands for *this* repository live in [`README.md`](README.md) and
+> [`AGENTS.md`](AGENTS.md).
+
 # Arctic: Lightweight, Stateless, and Deterministic Two-Round Threshold Schnorr Signatures
 
 <!-- status: verified | tests: 19 cargo | last_verified: 2026-10-05 -->

@@ -25,6 +25,7 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo test  --all-features --locked            # server/authority path on
 cargo test  --no-default-features --lib --locked  # library-only path
 cargo run                                    # synthetic local authority demo
+nix-shell -p python3 --run "python3 scripts/check-links"   # relative markdown links (CI: linkcheck.yml)
 ```
 
 Benchmarks and the paper reproduction (upstream's harness, renamed here —
