@@ -27,6 +27,7 @@ dependency stays cheap.
 | `/version` | GET | Build identity and the threshold in force. |
 | `/.well-known/did.json` | GET | DID document for the configured domain. |
 | `/api/v1/delegate` | POST | Delegation certificate ceremony. |
+| `/api/v1/messages` | POST | Accepts the shared normalized-message schema (`unfer_protocol::NormalizedMessage`) — the same dialect `unfer_edge`'s `POST /api/v1/ingest` speaks. |
 
 ### `/healthz`
 
@@ -45,8 +46,12 @@ curl -s http://localhost:3000/version
 ```
 
 ```json
-{"name":"arctic-authority","version":"0.1.0","threshold":2,"total_nodes":3,"domain":"..."}
+{"name":"arctic-authority","version":"0.1.0","threshold":3,"total_nodes":7,"domain":"..."}
 ```
+
+The values above are the built-in defaults (the row order in the table below
+matches this example); a process started with overrides reports whatever it
+resolved, which is the point of the endpoint.
 
 `threshold` and `total_nodes` are the **configured** values, not defaults — the
 question an operator is asking is how many shares this process will accept. The

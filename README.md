@@ -1,12 +1,22 @@
-<!-- status: verified | tests: 62 cargo | last_verified: 2026-10-05 -->
+<!-- status: verified | tests: 66 cargo | last_verified: 2026-10-05 -->
 
 ## Verification
 
 ```sh
-cargo test                          # 62 tests pass
+cargo test                          # 66 tests pass (19 lib + 47 bin/server)
 cargo clippy --all-targets -- -D warnings   # clean
 cargo build --no-default-features   # the shape unfer_consensus depends on
 ```
+
+The 66 is 19 library tests plus 47 in the `arctic` bin target (the AT-Protocol
+authority in `src/main.rs`), and `cargo test` runs both — `cargo test -- --list`
+reports the same 66, not double that. `README_arctic.md` quotes **19** because
+it is scoped to the library alone; the two numbers measure different targets and
+neither is a correction of the other. This line was stale at 62 until
+2026-10-05; `scripts/check-status` checks that the block is present and sane,
+not that the count still matches, so it drifted silently — see the retention
+note in the workspace `ATTRIBUTION.md` and the drift caveat in
+`unfer/scripts/check-status`.
 
 `unfer_consensus` takes this crate as a path dependency with
 `default-features = false` for `MintAuthority::Threshold`, so the library has to
@@ -124,4 +134,4 @@ This work is based on research by **Ian Goldberg** (iang@uwaterloo.ca) and **Che
 The repository is licensed under the **MIT License**.
 
 ---
-*Disclaimer: This project implements Native Robustness as described in ePrint 2024/466 Appendix C. The server is prototype status; the library is exercised by 32 passing unit tests and the unfer threshold-mint integration tests.*
+*Disclaimer: This project implements Native Robustness as described in ePrint 2024/466 Appendix C. The server is prototype status; the library is exercised by 19 passing unit tests (`cargo test --lib`) and the unfer threshold-mint integration tests. A full `cargo test` reports 66, counting the 47 authority-server tests as well; this line said 32, which matched neither target.*

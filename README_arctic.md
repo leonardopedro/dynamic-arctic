@@ -1,13 +1,15 @@
 # Arctic: Lightweight, Stateless, and Deterministic Two-Round Threshold Schnorr Signatures
 
-<!-- status: verified | tests: 19 cargo | last_verified: 2026-10-04 -->
+<!-- status: verified | tests: 19 cargo | last_verified: 2026-10-05 -->
 
 > Status: the Arctic/Shine library (`arctic_core`, `shine_core`) is functional —
-> **19 unit tests pass** (`cargo test`, last run 2026-10-04). This file
+> **19 unit tests pass** (`cargo test --lib`, last run 2026-10-05). This file
 > previously said 32; `cargo test -- --list` double-counts each test across the
-> lib and bin targets, and the run reports 19. The AT-Protocol authority server
-> in `src/main.rs` is a prototype; it builds under the default `server` feature.
-> The library itself has no server dependencies and is reused as a path
+> lib and bin targets. The library-only figure is 19; a full `cargo test` reports
+> **66** because it also runs the 47 tests of the AT-Protocol authority server in
+> `src/main.rs`, which is a prototype. `README.md` quotes that 66. The server
+> builds under the default `server` feature. The library itself has no server
+> dependencies and is reused as a path
 > dependency by `unfer/unfer_consensus` for the certificate ledger's threshold
 > mint authority (`MintAuthority::Threshold`, see `PROJECT_PLAN.md`), which is
 > why `cargo build --no-default-features` is part of the verification set.
@@ -24,6 +26,17 @@ We used Rust 1.73.0 to build and benchmark this code.
 
 ## Running the benchmarks
 
+> **Fork note.** The harness instructions below are upstream's. In this fork the
+> benchmark binary is named **`arctic_bench`** (it lives in
+> `src/bin/arctic_bench.rs`), because the plain `arctic` binary is now the
+> AT-Protocol authority server, whose CLI takes flags
+> (`arctic [--config FILE] [...]`, see `docs/RUNBOOK.md`) and rejects positional
+> arguments. Every `./target/release/arctic <n> <t> <Cs> <nsigs>` below means
+> `./target/release/arctic_bench <n> <t> <Cs> <nsigs>`. The single-threaded
+> script is present as `repro/repro_fig7a` (underscore, not `repro-fig7a`); the
+> `rayon` branch and `repro-fig7b` are **not** carried in this fork, so the
+> Figure 7b section is upstream documentation only.
+
 There are two branches in this repository: the `main` branch is the single-threaded version, and the `rayon` branch is the multi-threaded version.
 
 ### Single-threaded benchmarks (Figure 7a in the paper)
@@ -36,7 +49,7 @@ Build the code with:
 
 Then you can run individual benchmarks with:
 
-  - <code>./target/release/arctic _n_ _t_ _Cs_ _nsigs_</code>
+  - <code>./target/release/arctic_bench _n_ _t_ _Cs_ _nsigs_</code>
 
 Where:
 
@@ -49,7 +62,7 @@ It must be the case that <code>_n_</code> ≥ <code>_Cs_</code> ≥ 2<code>_t_</
 
 Sample command line:
 
-`./target/release/arctic 21 11 21 10`
+`./target/release/arctic_bench 21 11 21 10`
 
 Sample output:
 
@@ -67,12 +80,17 @@ To collect all the datapoints needed to reproduce the Arctic data in Figure 7a i
 
 ```bash
    cd repro
-   ./repro-fig7a
+   ./repro_fig7a
 ```
 
 This should take about 30–40 minutes, depending on your hardware.  The values plotted in the figure are the sums of the means of Sign1, Sign2, and Combine, divided by 1000 to convert from microseconds to milliseconds.  The stddevs plotted are the square roots of the sums of the squares of the stddevs of Sign1, Sign2, and Combine (and again converted to milliseconds), but they are mostly too small to see in the figure.
 
 ### Multi-threaded benchmarks (Figure 7b in the paper)
+
+> **Not carried in this fork.** This section describes upstream's `rayon`
+> branch and its `repro-fig7b` script; neither exists here, and the commands
+> below are retained only to document what the paper measured. See the fork
+> note at the top of this section.
 
 Build the code with:
 ```bash

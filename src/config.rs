@@ -274,7 +274,6 @@ impl Config {
     }
 }
 
-/// Apply one raw string to the config. Returns false if it was rejected.
 /// Render a JSON scalar as the string `apply` expects.
 ///
 /// Numbers and bools are accepted so a config file can be written naturally.
@@ -290,6 +289,7 @@ fn scalar_to_string(v: &Value) -> Option<String> {
     }
 }
 
+/// Apply one raw string to the config. Returns false if it was rejected.
 fn apply(cfg: &mut Config, key: &str, raw: &str) -> bool {
     match key {
         "bind_addr" => {
