@@ -43,9 +43,10 @@ with thin LTO, incremental builds, and symbols kept for `perf`; numbers of
 record and `repro_fig7a` stay on `--release` (the `[profile.lab]` definition is
 in `Cargo.toml`).
 
-The `n ≥ Cs ≥ 2t-1` precondition is an `assert!`, not a validation error, so an
-out-of-range datapoint panics rather than printing usage. `repro/repro_fig7a`
-sets `Cs = n` and starts at `n = 2t-1`, which satisfies it. Figure 7b and the
+Both benches validate their arguments (claurst-style strict CLI): a malformed
+or out-of-range datapoint — including the `n ≥ Cs ≥ 2t-1` precondition — prints
+the failing bound and exits 2 instead of panicking. `repro/repro_fig7a` sets
+`Cs = n` and starts at `n = 2t-1`, which satisfies it. Figure 7b and the
 `rayon` branch are upstream-only and are not carried here.
 
 CI (`.github/workflows/ci.yml`) runs exactly the above two test profiles plus

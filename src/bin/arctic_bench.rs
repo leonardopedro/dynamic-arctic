@@ -49,26 +49,52 @@ fn stddev(vals: &[f64]) -> f64 {
         .sqrt()
 }
 
+/// A usage error: message + the precondition line on stderr, exit 2 — the
+/// contract the sibling runner CLIs already follow (an out-of-range
+/// datapoint prints the failing bound instead of a panic backtrace).
+fn usage_error(msg: &str) -> ! {
+    eprintln!("arctic_bench: {msg}");
+    eprintln!(
+        "usage: arctic_bench n t Csize [reps]  (t >= 1, Csize >= 2t-1, n >= Csize, reps >= 1)"
+    );
+    std::process::exit(2);
+}
+
+fn arg(raw: &str, name: &str) -> u32 {
+    raw.parse()
+        .unwrap_or_else(|_| usage_error(&format!("{name} must be a whole number, got {raw:?}")))
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 4 || args.len() > 5 {
-        println!("Usage: {} n t Csize [reps]", args[0]);
-        return;
+        usage_error("expected 3 or 4 arguments");
     }
-    let n: u32 = args[1].parse().unwrap();
-    let t: u32 = args[2].parse().unwrap();
+    let n: u32 = arg(&args[1], "n");
+    let t: u32 = arg(&args[2], "t");
     let msglen: usize = 100;
-    let coalitionsize: u32 = args[3].parse().unwrap();
+    let coalitionsize: u32 = arg(&args[3], "Csize");
     let mut reps = 1usize;
     if args.len() > 4 {
-        reps = args[4].parse().unwrap();
+        reps = args[4].parse().unwrap_or_else(|_| {
+            usage_error(&format!("reps must be a whole number, got {:?}", args[4]))
+        });
+        if reps < 1 {
+            usage_error("reps must be >= 1");
+        }
     }
     let mut msg: Vec<u8> = Vec::new();
     let mut rng = rand::thread_rng();
     msg.resize(msglen, 0);
-    assert!(t >= 1);
-    assert!(coalitionsize >= 2 * t - 1);
-    assert!(n >= coalitionsize);
+    if t < 1 {
+        usage_error("t must be >= 1");
+    }
+    if coalitionsize < 2 * t - 1 {
+        usage_error(&format!("Csize must be >= 2t-1 ({})", 2 * t - 1));
+    }
+    if n < coalitionsize {
+        usage_error("n must be >= Csize");
+    }
 
     let (pubkey, _, mut seckeys) = arctic_core::keygen(n, t);
     let delta = seckeys[0].delta();

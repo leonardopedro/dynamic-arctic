@@ -50,18 +50,36 @@ fn stddev(vals: &[f64]) -> f64 {
         .sqrt()
 }
 
+/// A usage error: message + usage on stderr, exit 2 — a malformed
+/// datapoint prints the bad value instead of a panic backtrace.
+fn usage_error(msg: &str) -> ! {
+    eprintln!("shine_bench: {msg}");
+    eprintln!("usage: shine_bench n t wlen [reps]  (whole numbers, reps >= 1)");
+    std::process::exit(2);
+}
+
+fn arg(raw: &str, name: &str) -> u32 {
+    raw.parse()
+        .unwrap_or_else(|_| usage_error(&format!("{name} must be a whole number, got {raw:?}")))
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 4 || args.len() > 5 {
-        println!("Usage: {} n t wlen [reps]", args[0]);
-        return;
+        usage_error("expected 3 or 4 arguments");
     }
-    let n: u32 = args[1].parse().unwrap();
-    let t: u32 = args[2].parse().unwrap();
-    let wlen: usize = args[3].parse().unwrap();
+    let n: u32 = arg(&args[1], "n");
+    let t: u32 = arg(&args[2], "t");
+    let wlen: u32 = arg(&args[3], "wlen");
+    let wlen: usize = wlen as usize;
     let mut reps = 1usize;
     if args.len() > 4 {
-        reps = args[4].parse().unwrap();
+        reps = args[4].parse().unwrap_or_else(|_| {
+            usage_error(&format!("reps must be a whole number, got {:?}", args[4]))
+        });
+        if reps < 1 {
+            usage_error("reps must be >= 1");
+        }
     }
     let mut wvec: Vec<u8> = Vec::new();
     let mut rng = rand::thread_rng();
