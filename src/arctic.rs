@@ -87,22 +87,80 @@ impl ArcticNode {
     }
 }
 
-/// Derive a deterministic Session ID from the message and current time window
+/// Derive a deterministic Session ID from the message and the current wall
+/// clock. Production entry point; the clock itself is injected through
+/// [`derive_session_id_at`] so the window boundaries stay testable.
 pub fn derive_session_id(message: &[u8]) -> [u8; 32] {
-    let mut hasher = Sha512::new();
-    hasher.update(message);
-    // Bind to a 1-hour window for stateless replay protection as per Appendix C.1
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .expect("system clock before Unix epoch")
         .as_secs();
-    let hour_window = now / 3600;
+    derive_session_id_at(message, now)
+}
+
+/// Derive a deterministic Session ID from a message and an explicit Unix
+/// timestamp (seconds). Same inputs always yield the same id, and the id only
+/// changes when the timestamp crosses an hour boundary.
+///
+/// Bind to a 1-hour window for stateless replay protection as per Appendix C.1:
+/// every node in the coalition derives the same id for a request seen in the
+/// same window without any shared state, and a replayed request from an earlier
+/// window derives a different id.
+pub fn derive_session_id_at(message: &[u8], unix_secs: u64) -> [u8; 32] {
+    let mut hasher = Sha512::new();
+    hasher.update(message);
+    let hour_window = unix_secs / 3600;
     hasher.update(hour_window.to_be_bytes());
 
     let result = hasher.finalize();
     let mut session_id = [0u8; 32];
     session_id.copy_from_slice(&result[..32]);
     session_id
+}
+
+#[test]
+pub fn test_session_id_deterministic() {
+    // Same message in the same window => identical id everywhere (stateless).
+    let m = b"atproto request payload";
+    let a = derive_session_id_at(m, 1_760_000_000);
+    let b = derive_session_id_at(m, 1_760_000_000);
+    assert_eq!(a, b);
+}
+
+#[test]
+pub fn test_session_id_hour_window_boundaries() {
+    let m = b"atproto request payload";
+    let base = 3600 * 488_888; // exact window start
+
+    // First and last second of a window derive the same id...
+    let first = derive_session_id_at(m, base);
+    assert_eq!(first, derive_session_id_at(m, base + 3599));
+    // ...and the next second crosses into a new window with a different id.
+    let next = derive_session_id_at(m, base + 3600);
+    assert_ne!(first, next);
+    // The new window is stable through its own final second.
+    assert_eq!(next, derive_session_id_at(m, base + 7199));
+}
+
+#[test]
+pub fn test_session_id_message_bound() {
+    // Different messages in the same window must not collide.
+    let t = 1_760_000_000;
+    assert_ne!(
+        derive_session_id_at(b"request A", t),
+        derive_session_id_at(b"request B", t)
+    );
+}
+
+#[test]
+pub fn test_session_id_wall_clock_window() {
+    // The wall-clock entry point and its injected twin agree for "now".
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let m = b"same payload";
+    assert_eq!(derive_session_id(m), derive_session_id_at(m, now));
 }
 
 /// Aggregate Round 1 and Round 2 payloads into a final signature using robust math

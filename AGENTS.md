@@ -38,6 +38,11 @@ cargo build --release
 cd repro && ./repro_fig7a                       # Figure 7a datapoints (30–40 min)
 ```
 
+While iterating on bench code, `cargo build --profile lab` gives release speed
+with thin LTO, incremental builds, and symbols kept for `perf`; numbers of
+record and `repro_fig7a` stay on `--release` (the `[profile.lab]` definition is
+in `Cargo.toml`).
+
 The `n ≥ Cs ≥ 2t-1` precondition is an `assert!`, not a validation error, so an
 out-of-range datapoint panics rather than printing usage. `repro/repro_fig7a`
 sets `Cs = n` and starts at `n = 2t-1`, which satisfies it. Figure 7b and the

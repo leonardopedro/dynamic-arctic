@@ -38,6 +38,17 @@ subtle = { version = "2.6", optional = true }
 # `unfer_consensus -> dynamic-arctic` edge simply gains one hop.
 unfer_protocol = { path = "../unfer/unfer_protocol", optional = true }
 
+# Fast-iteration bench profile: release speed with thin LTO, incremental
+# builds, and symbols kept so `perf` attributes CPU by function. Adapted from
+# celld's `lab` profile. Benchmarks/repro numbers of record stay on
+# `--release` (exact upstream comparison); use `--profile lab` while
+# iterating on bench code.
+[profile.lab]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+incremental = true
+
 [[bin]]
 name = "arctic"
 path = "src/main.rs"
