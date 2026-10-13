@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# dynamic-arctic invariant gate.
+#
+# Machine-checks the promises this repo's own AGENTS.md and README make:
+# pinned toolchain, the lab bench profile, a runnable paper repro, the
+# upstream citation, the honesty banner, SHA-pinned CI actions, and the
+# presence of the link gate. Same check/gap style as the sibling repos'
+# verify-invariants. Exit 0 = green, 1 = at least one FAIL.
+#
+# Usage: bash scripts/verify-invariants   (from the repo root)
+
+set -u
+FAILED=0
+PASSED=0
+
+check() {
+    local name="$1"; shift
+    if "$@" >/dev/null 2>&1; then echo "[pass] $name"; PASSED=$((PASSED + 1))
+    else echo "[FAIL] $name"; FAILED=$((FAILED + 1)); fi
+}
+
+repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$repo_root"
+
+# --- D1: single pinned toolchain (deliberate bumps, lockstep with siblings) -
+check "D1: rust-toolchain.toml pins a channel" \
+    grep -q '^channel = "' rust-toolchain.toml
+
+# --- D2: the lab bench profile exists (numbers of record stay --release) ----
+check "D2: Cargo.toml defines [profile.lab]" \
+    grep -q '^\[profile\.lab\]' Cargo.toml
+
+# --- D3: the Figure 7a reproduction is present and executable ---------------
+check "D3: repro/repro_fig7a exists and is executable" \
+    test -x repro/repro_fig7a
+
+# --- D4: honesty banner — prototype status and the ePrint citation ----------
+check "D4: README.md carries the PROTOTYPE status banner" \
+    grep -q 'PROTOTYPE' README.md
+check "D4: README.md carries the ePrint 2024/466 disclaimer" \
+    grep -q 'ePrint 2024/466' README.md
+check "D4: README_UPSTREAM.md cites the upstream scheme" \
+    bash -c 'grep -q "eprint.iacr.org/2024/466\|Komlo" README_UPSTREAM.md'
+
+# --- D5: every CI action is SHA-pinned (X7 discipline) ---------------------
+if grep -q 'uses:' .github/workflows/*.yml 2>/dev/null; then
+    unpinned=$(grep -h 'uses:' .github/workflows/*.yml 2>/dev/null \
+        | grep -vc 'uses:.*@[a-f0-9]\{40\}' || true)
+    if [ "$unpinned" -eq 0 ]; then
+        echo "[pass] D5: all CI actions are SHA-pinned"
+        PASSED=$((PASSED + 1))
+    else
+        echo "[FAIL] D5: $unpinned CI action(s) not SHA-pinned"
+        FAILED=$((FAILED + 1))
+    fi
+else
+    echo "[FAIL] D5: no CI workflows found"
+    FAILED=$((FAILED + 1))
+fi
+
+# --- D6: the link gate exists (this repo's only prose gate) ----------------
+check "D6: scripts/check-links exists" test -f scripts/check-links
+
+echo ""
+echo "verify-invariants: $PASSED passed, $FAILED failed"
+[ "$FAILED" -eq 0 ]
