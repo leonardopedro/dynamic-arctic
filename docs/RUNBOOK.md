@@ -134,7 +134,7 @@ and domain. That is deployment configuration, not runtime state.
 ## Verify
 
 ```sh
-cargo test                              # 66 (19 library + 47 ops surface/ingest)
+cargo test                              # 74 (23 library + 51 ops surface/ingest)
 cargo clippy --all-targets -- -D warnings
 ```
 

@@ -8,14 +8,14 @@
 
 # Arctic: Lightweight, Stateless, and Deterministic Two-Round Threshold Schnorr Signatures
 
-<!-- status: verified | tests: 19 cargo | last_verified: 2026-10-05 -->
+<!-- status: verified | tests: 23 cargo (library target only; README.md's 74 counts the server too) | last_verified: 2026-10-15 -->
 
 > Status: the Arctic/Shine library (`arctic_core`, `shine_core`) is functional —
-> **19 unit tests pass** (`cargo test --lib`, last run 2026-10-05). This file
+> **23 unit tests pass** (`cargo test --lib`, last run 2026-10-15). This file
 > previously said 32; `cargo test -- --list` double-counts each test across the
-> lib and bin targets. The library-only figure is 19; a full `cargo test` reports
-> **66** because it also runs the 47 tests of the AT-Protocol authority server in
-> `src/main.rs`, which is a prototype. `README.md` quotes that 66. The server
+> lib and bin targets. The library-only figure is 23; a full `cargo test` reports
+> **74** because it also runs the 51 tests of the AT-Protocol authority server in
+> `src/main.rs`, which is a prototype. `README.md` quotes that 74. The server
 > builds under the default `server` feature. The library itself has no server
 > dependencies and is reused as a path
 > dependency by `unfer/unfer_consensus` for the certificate ledger's threshold
