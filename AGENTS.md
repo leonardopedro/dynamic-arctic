@@ -38,6 +38,10 @@ cargo build --release
 cd repro && ./repro_fig7a                       # Figure 7a datapoints (30–40 min)
 ```
 
+`repro_fig7a` is scheduled weekly by `.github/workflows/heavy-repro.yml`
+(a record, not a gate — datapoints uploaded as an artifact), so the
+30–40 min sweep sits on nobody's remember-to-run list.
+
 While iterating on bench code, `cargo build --profile lab` gives release speed
 with thin LTO, incremental builds, and symbols kept for `perf`; numbers of
 record and `repro_fig7a` stay on `--release` (the `[profile.lab]` definition is

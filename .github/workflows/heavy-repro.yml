@@ -1,0 +1,68 @@
+# Heavy reproduction lane — Figure 7a, the 30–40 min paper datapoints.
+#
+# ci.yml is the fast gate (fmt/clippy/tests on every push). `repro/repro_fig7a`
+# sweeps arctic_bench across the (t, n) grid with 10 signatures per point and
+# takes half an hour on a warm machine — far past what a per-push lane should
+# carry, and until now it was a remember-to-run script: exactly the orphan
+# unfer's heavy-tests.yml adopts (CI layering from REA: one fast gate per
+# push, scheduled real-environment lanes per concern).
+#
+# Triggering: weekly, so a slow regression in the benchmarked path surfaces
+# without a human; workflow_dispatch on demand before touching bench code.
+# The datapoints land in repro/<hostname>.out and are uploaded as an
+# artifact — this lane is a record, not a gate: a red run pages nobody, but
+# the artifact shows when the curve moved. The push gate is untouched.
+
+name: Heavy repro (Figure 7a)
+
+on:
+  schedule:
+    - cron: "43 3 * * 3" # Wednesdays 03:43 UTC, off the top-of-hour stampede
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fig7a:
+    name: repro_fig7a datapoints (release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120 # measured 30–40 min on a warm box; a cold runner builds first
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout@v7.0.1
+
+      # Same discipline as ci.yml: the channel comes from rust-toolchain.toml,
+      # so a deliberate bump is picked up here automatically.
+      - name: Activate pinned toolchain (rust-toolchain.toml)
+        run: cargo --version
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6  # Swatinem/rust-cache@v2
+
+      # Numbers of record stay on --release (AGENTS.md: the `lab` profile is
+      # for iteration, release is the record).
+      - name: build the benchmark (release)
+        run: cargo build --release
+
+      - name: run repro_fig7a
+        run: bash repro/repro_fig7a
+
+      # The datapoint file is the record; surface its tail in the step output
+      # so a moved curve is visible without downloading the artifact.
+      - name: show the datapoint tail
+        if: always()
+        run: |
+          out=$(ls -1t repro/*.out 2>/dev/null | head -1) || true
+          if [ -n "$out" ]; then
+            echo "--- $out (last 60 lines) ---"
+            tail -60 "$out"
+          else
+            echo "no datapoint file was produced"
+          fi
+
+      - name: upload the datapoints
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # actions/upload-artifact@v7.0.1
+        with:
+          name: fig7a-datapoints
+          path: repro/*.out
+          if-no-files-found: ignore
+          retention-days: 60
