@@ -18,5 +18,10 @@ jobs:
       # the link names.
       - name: workspace-root ATTRIBUTION (mirrored)
         run: curl -fsSL https://raw.githubusercontent.com/leonardopedro/emthin/main/workspace-backup/ATTRIBUTION.md -o ../ATTRIBUTION.md
+      # docs/RUNBOOK.md:148 links ../../unfer/deploy/DEPLOY.md — a sibling
+      # repo a lone checkout does not have (and a green dev box does), so
+      # clone unfer at the path the link names.
+      - name: unfer sibling (RUNBOOK's deploy link)
+        run: git clone --depth 1 --branch main https://github.com/leonardopedro/unfer.git ../unfer
       - name: check-links
         run: python3 scripts/check-links
