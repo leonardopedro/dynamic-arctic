@@ -18,6 +18,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout@v7.0.1
+      # unfer_protocol is a path dep on ../unfer (the default 'server'
+      # feature), so the workspace cannot resolve without the sibling —
+      # this job's clippy failed on every run without it.
+      - name: Checkout unfer as sibling (path dep)
+        run: git clone --depth 1 --branch main https://github.com/leonardopedro/unfer.git ../unfer
       # First cargo invocation auto-installs the rust-toolchain.toml channel
       # and makes it the active toolchain for this directory.
       - name: Activate pinned toolchain (rust-toolchain.toml)
@@ -25,7 +30,11 @@ jobs:
       - name: Add lint components
         run: rustup component add rustfmt clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6  # Swatinem/rust-cache@v2
-      - run: cargo fmt --all -- --check
+      # Scoped to this repo's own files (rustfmt + git ls-files), not
+      # `cargo fmt --all`: --all walks path dependencies and would make
+      # *this* repo's gate red on a formatting drift inside unfer — the
+      # cross-repo coupling velysterm's format job deliberately dropped.
+      - run: rustfmt --edition 2021 --check $(git ls-files '*.rs')
       # --all-features also lints the 'server' authority binary (axum/tokio).
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
 
@@ -34,6 +43,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout@v7.0.1
+      # unfer_protocol is a path dep on ../unfer (the default 'server'
+      # feature), so `--all-features` cannot resolve without the sibling.
+      - name: Checkout unfer as sibling (path dep)
+        run: git clone --depth 1 --branch main https://github.com/leonardopedro/unfer.git ../unfer
       - name: Activate pinned toolchain (rust-toolchain.toml)
         run: cargo --version
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6  # Swatinem/rust-cache@v2
