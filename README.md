@@ -1,4 +1,4 @@
-<!-- status: verified | tests: 74 cargo | last_verified: 2026-10-18 -->
+<!-- status: verified | tests: 74 cargo | last_verified: 2026-10-20 -->
 
 ## Verification
 
