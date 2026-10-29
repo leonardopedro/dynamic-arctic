@@ -7,6 +7,7 @@ cross-repo table — including what was deliberately **not** adopted — is
 | source | licence | what was adapted | where it landed |
 |---|---|---|---|
 | Arctic (Komlo & Goldberg, PKC 2025) | MIT (this repo) | the threshold-Schnorr scheme is implemented *from the paper*, which is credited in `README_UPSTREAM.md` | `src/arctic_core.rs`, `src/shine_core.rs` |
+| `celld` (sibling repo, same author; tree not currently checked out) | Apache-2.0 — as recorded in the reviewed workspace-ledger table (preserved at `../emthin/workspace-backup/ATTRIBUTION.md`); row restored here 2026-10-28 | the `lab` fast-iteration bench profile: release speed with thin LTO, incremental builds, symbols kept so `perf` attributes CPU by function; numbers of record stay on `--release` | `Cargo.toml` (bench profile `lab`) |
 
 ## Notes
 
